@@ -70,5 +70,20 @@ if uploaded_files:
             plt.yticks(rotation=0)
             st.pyplot(fig)
 
+        # === Visualisation 4 : Présentes vs Manquantes (Barplot empilé) ===
+if "Présentes" in df_freq_summary.columns and "Manquantes" in df_freq_summary.columns:
+    df_stacked = df_freq_summary[["Capteur", "Présentes", "Manquantes"]].copy()
+    df_stacked.set_index("Capteur", inplace=True)
+
+    fig, ax = plt.subplots(figsize=(14, 6))
+    df_stacked.plot(kind='bar', stacked=True, ax=ax, color=["#2ca02c", "#d62728"])
+    plt.axhline(total, color="grey", linestyle="--", linewidth=0.8)
+    plt.xticks(rotation=45, ha='right')
+    plt.ylabel("Nombre de points")
+    plt.title(f"Données présentes vs manquantes – fréquence {freq}")
+    plt.legend(loc="upper right")
+    plt.tight_layout()
+    st.pyplot(fig)
+
         except Exception as e:
             st.error(f"Erreur lors de l'analyse de {file.name} : {str(e)}")
