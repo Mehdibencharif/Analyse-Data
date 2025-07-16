@@ -70,20 +70,34 @@ if uploaded_files:
             plt.yticks(rotation=0)
             st.pyplot(fig)
 
-     # === Visualisation 4 : Présentes vs Manquantes (Barplot empilé) ===
-if 'Présentes' in df_freq_summary.columns and 'Manquantes' in df_freq_summary.columns:
-    try:
-        df_stacked = df_freq_summary[["Capteur", "Présentes", "Manquantes"]].copy()
-        df_stacked.set_index("Capteur", inplace=True)
+      # === Visualisation 4 : Présentes vs Manquantes (Barplot empilé) ===
+            df_last_freq = df_time.resample("1D").mean(numeric_only=True)
+            summary_freq = []
+            total = len(df_last_freq)
 
-        fig, ax = plt.subplots(figsize=(14, 6))
-        df_stacked.plot(kind='bar', stacked=True, ax=ax, color=["#2ca02c", "#d62728"])
-        plt.axhline(df_stacked.sum(axis=1).max(), color="grey", linestyle="--", linewidth=0.8)
-        plt.xticks(rotation=45, ha='right')
-        plt.ylabel("Nombre de données")
-        plt.title(f"Données présentes vs manquantes – fréquence {freq}")
-        plt.legend(loc="upper right")
-        plt.tight_layout()
-        st.pyplot(fig)
-    except Exception as e:
-        st.warning(f"Erreur lors de l'affichage du graphique Présentes vs Manquantes : {e}")
+            for col in df_last_freq.columns:
+                if col.lower() in ["notes"]:
+                    continue
+                serie = df_last_freq[col].dropna()
+                non_na = len(serie)
+                missing = total - non_na
+
+                summary_freq.append({
+                    "Capteur": col,
+                    "Présentes": non_na,
+                    "Manquantes": missing,
+                })
+
+            df_freq_summary = pd.DataFrame(summary_freq)
+
+            if 'Présentes' in df_freq_summary.columns and 'Manquantes' in df_freq_summary.columns:
+                df_stacked = df_freq_summary.set_index("Capteur")[["Présentes", "Manquantes"]]
+                fig, ax = plt.subplots(figsize=(14, 6))
+                df_stacked.plot(kind='bar', stacked=True, ax=ax, color=["#2ca02c", "#d62728"])
+                plt.axhline(df_stacked.sum(axis=1).max(), color="grey", linestyle="--", linewidth=0.8)
+                plt.xticks(rotation=45, ha='right')
+                plt.ylabel("Nombre de données")
+                plt.title("Données présentes vs manquantes – fréquence 1D")
+                plt.legend(loc="upper right")
+                plt.tight_layout()
+                st.pyplot(fig)
