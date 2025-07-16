@@ -3,6 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from io import BytesIO
+from datetime import timedelta
 
 st.set_page_config(page_title="Analyse de données capteurs", layout="wide")
 st.title("📊 Analyse de données capteurs")
@@ -10,6 +11,7 @@ st.title("📊 Analyse de données capteurs")
 uploaded_files = st.file_uploader("Choisissez un ou plusieurs fichiers Excel à analyser", type=[".xlsx", ".xls"], accept_multiple_files=True)
 
 seuil_manquantes = st.slider("Seuil critique de données manquantes (%)", 0, 100, 30)
+frequence_attendue_minutes = st.number_input("Fréquence attendue (en minutes)", min_value=1, max_value=1440, value=1)
 
 if uploaded_files:
     for file in uploaded_files:
@@ -70,37 +72,41 @@ if uploaded_files:
             plt.yticks(rotation=0)
             st.pyplot(fig)
 
-            # === Visualisation 4 : Présentes vs Manquantes (Barplot empilé) ===
-            df_last_freq = df_time.resample("1D").mean(numeric_only=True)
-            summary_freq = []
-            total = len(df_last_freq)
+            # === Présentes vs Manquantes selon grille attendue (version Excel-like) ===
+            st.subheader("Présentes vs Manquantes (selon fréquence attendue)")
+            start = df["timestamp"].min()
+            end = df["timestamp"].max()
+            expected_index = pd.date_range(start=start, end=end, freq=f"{frequence_attendue_minutes}min")
+            df_full = df.set_index("timestamp").reindex(expected_index)
 
-            for col in df_last_freq.columns:
-                if col.lower() in ["notes"]:
+            resultats = []
+            for col in df_full.columns:
+                if col.lower() in ['notes']:
                     continue
-                serie = df_last_freq[col].dropna()
-                non_na = len(serie)
-                missing = total - non_na
-
-                summary_freq.append({
+                total_theorique = len(df_full)
+                valides = df_full[col].notna().sum()
+                pct_pres = 100 * valides / total_theorique
+                pct_manq = 100 - pct_pres
+                resultats.append({
                     "Capteur": col,
-                    "Présentes": non_na,
-                    "Manquantes": missing,
+                    "Présentes": valides,
+                    "Manquantes": total_theorique - valides,
+                    "% présentes": round(pct_pres, 2),
+                    "% manquantes": round(pct_manq, 2)
                 })
 
-            df_freq_summary = pd.DataFrame(summary_freq)
+            df_resultats_excel = pd.DataFrame(resultats)
+            st.dataframe(df_resultats_excel)
 
-            if 'Présentes' in df_freq_summary.columns and 'Manquantes' in df_freq_summary.columns:
-                df_stacked = df_freq_summary.set_index("Capteur")[["Présentes", "Manquantes"]]
-                fig, ax = plt.subplots(figsize=(14, 6))
-                df_stacked.plot(kind='bar', stacked=True, ax=ax, color=["#2ca02c", "#d62728"])
-                plt.axhline(df_stacked.sum(axis=1).max(), color="grey", linestyle="--", linewidth=0.8)
-                plt.xticks(rotation=45, ha='right')
-                plt.ylabel("Nombre de données")
-                plt.title("Données présentes vs manquantes – fréquence 1D")
-                plt.legend(loc="upper right")
-                plt.tight_layout()
-                st.pyplot(fig)
+            # Graphe barres empilées version Excel
+            df_stacked = df_resultats_excel.set_index("Capteur")[["Présentes", "Manquantes"]]
+            fig, ax = plt.subplots(figsize=(14, 6))
+            df_stacked.plot(kind='bar', stacked=True, ax=ax, color=["#2ca02c", "#d62728"])
+            plt.xticks(rotation=45, ha='right')
+            plt.ylabel("Nombre de données")
+            plt.title(f"Présentes vs Manquantes – fréquence attendue : {frequence_attendue_minutes} min")
+            plt.tight_layout()
+            st.pyplot(fig)
 
         except Exception as e:
             st.error(f"Erreur lors de l'analyse de {file.name} : {str(e)}")
