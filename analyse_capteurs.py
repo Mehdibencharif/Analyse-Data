@@ -78,3 +78,29 @@ if uploaded_files:
 
         except Exception as e:
             st.error(f"Erreur lors de l'analyse de {file.name} : {str(e)}")
+
+# === Analyse des écarts de temps entre deux mesures ===
+st.subheader("⏱️ Analyse des écarts entre les timestamps")
+
+df['delta_minutes'] = df['timestamp'].diff().dt.total_seconds() / 60
+
+# Supprimer le premier NaN
+deltas = df['delta_minutes'].dropna()
+
+# Affichage des statistiques de base
+st.write("**Statistiques des écarts (en minutes) entre les points de données :**")
+st.write(deltas.describe())
+
+# Histogramme des écarts
+fig_delta, ax_delta = plt.subplots(figsize=(12, 4))
+sns.histplot(deltas, bins=50, kde=True, ax=ax_delta)
+plt.xlabel("Écart de temps entre deux points (minutes)")
+plt.ylabel("Fréquence")
+plt.title("Distribution des écarts temporels entre les points de mesure")
+st.pyplot(fig_delta)
+
+# Affichage du % de grands écarts
+seuil = st.slider("Seuil pour considérer un grand écart (minutes)", 10, 240, 60)
+nb_grands_ecarts = (deltas > seuil).sum()
+pct_grands_ecarts = 100 * nb_grands_ecarts / len(deltas)
+st.markdown(f"🔍 **{pct_grands_ecarts:.2f}% des écarts dépassent {seuil} minutes**")
