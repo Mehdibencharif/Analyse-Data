@@ -70,7 +70,7 @@ if uploaded_files:
             plt.yticks(rotation=0)
             st.pyplot(fig)
 
-      # === Visualisation 4 : Présentes vs Manquantes (Barplot empilé) ===
+            # === Visualisation 4 : Présentes vs Manquantes (Barplot empilé) ===
             df_last_freq = df_time.resample("1D").mean(numeric_only=True)
             summary_freq = []
             total = len(df_last_freq)
@@ -101,3 +101,6 @@ if uploaded_files:
                 plt.legend(loc="upper right")
                 plt.tight_layout()
                 st.pyplot(fig)
+
+        except Exception as e:
+            st.error(f"Erreur lors de l'analyse de {file.name} : {str(e)}")
