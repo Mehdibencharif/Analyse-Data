@@ -73,7 +73,7 @@ if uploaded_files:
             st.pyplot(fig)
 
             # === Présentes vs Manquantes selon grille attendue (version Excel-like) ===
-            st.subheader("Présentes vs Manquantes (selon fréquence attendue)")
+            st.subheader("% de Données Manquantes par Variable (grille théorique)")
             start = df["timestamp"].min()
             end = df["timestamp"].max()
             expected_index = pd.date_range(start=start, end=end, freq=f"{frequence_attendue_minutes}min")
@@ -89,22 +89,18 @@ if uploaded_files:
                 pct_manq = 100 - pct_pres
                 resultats.append({
                     "Capteur": col,
-                    "Présentes": valides,
-                    "Manquantes": total_theorique - valides,
-                    "% présentes": round(pct_pres, 2),
                     "% manquantes": round(pct_manq, 2)
                 })
 
             df_resultats_excel = pd.DataFrame(resultats)
             st.dataframe(df_resultats_excel)
 
-            # Graphe barres empilées version Excel
-            df_stacked = df_resultats_excel.set_index("Capteur")[["Présentes", "Manquantes"]]
+            # Graphe barre simple (% manquantes)
             fig, ax = plt.subplots(figsize=(14, 6))
-            df_stacked.plot(kind='bar', stacked=True, ax=ax, color=["#2ca02c", "#d62728"])
+            sns.barplot(data=df_resultats_excel, x="Capteur", y="% manquantes", color="darkblue")
             plt.xticks(rotation=45, ha='right')
-            plt.ylabel("Nombre de données")
-            plt.title(f"Présentes vs Manquantes – fréquence attendue : {frequence_attendue_minutes} min")
+            plt.ylabel("% Manquant")
+            plt.title("% de Données Manquantes par Variable")
             plt.tight_layout()
             st.pyplot(fig)
 
