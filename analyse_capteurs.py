@@ -57,6 +57,14 @@ def analyse_simplifiee(df):
     plt.xticks(rotation=45, ha='right')
     plt.tight_layout()
     st.pyplot(fig)
+    
+    # 🔍 Vérification : est-ce que chaque capteur analysé est dans la référence ?
+    if capteurs_reference is not None:
+        df_resume["Dans la référence"] = df_resume["Capteur"].apply(
+            lambda capteur: "✅ Oui" if capteur in capteurs_reference else "❌ Non"
+        )
+        st.subheader("📋 Validation des capteurs analysés")
+        st.dataframe(df_resume[["Capteur", "Dans la référence"]], use_container_width=True)
     return df_resume
 
 # --- Analyse complète ---
