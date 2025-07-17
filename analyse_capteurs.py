@@ -85,40 +85,60 @@ if main_file:
     plt.tight_layout()
     st.pyplot(fig1)
 
-    if compare_file:
-        st.subheader("🔁 Comparaison avec un deuxième fichier")
-        df_compare = charger_et_resampler(compare_file, "Fichier comparaison")
-        df_compare_resample = df_compare.set_index("timestamp").resample(rule_map[frequence]).mean().reset_index()
-        stats_compare = analyser_completude(df_compare_resample)
+ if compare_file:
+    st.subheader("🔁 Comparaison avec un deuxième fichier")
+    df_compare = charger_et_resampler(compare_file, "Fichier comparaison")
 
-        df_merged = pd.merge(stats_main, stats_compare, on="Capteur", how="outer", suffixes=(" (Principal)", " (Comparaison)"))
-        df_merged = df_merged.fillna({"% Données présentes (Principal)": 0, "% Données présentes (Comparaison)": 0})
+    # 🔧 Corriger ici : ne garder que les colonnes numériques pour le resampling
+    if "timestamp" not in df_compare.columns:
+        st.error("Le fichier de comparaison ne contient pas de colonne 'timestamp'.")
+        st.stop()
 
-        def statut_global(row):
-            if row['% Données présentes (Principal)'] == 0 and row['% Données présentes (Comparaison)'] == 0:
-                return "🔴"
-            elif row['% Données présentes (Principal)'] == 100 and row['% Données présentes (Comparaison)'] == 100:
-                return "🟢"
-            else:
-                return "🟠"
+    try:
+        df_compare["timestamp"] = pd.to_datetime(df_compare["timestamp"], errors="coerce")
+        df_compare = df_compare.dropna(subset=["timestamp"])
+        df_compare_numeric = df_compare.select_dtypes(include="number")
+        df_compare_resample = df_compare_numeric.set_index(df_compare["timestamp"]).resample(rule_map[frequence]).mean().reset_index()
+        df_compare_resample["timestamp"] = pd.to_datetime(df_compare_resample["timestamp"])
+    except Exception as e:
+        st.error(f"Erreur lors du traitement du fichier de comparaison : {str(e)}")
+        st.stop()
 
-        df_merged["Statut global"] = df_merged.apply(statut_global, axis=1)
-        st.dataframe(df_merged, use_container_width=True)
+    stats_compare = analyser_completude(df_compare_resample)
 
-        fig2, ax2 = plt.subplots(figsize=(14, 5))
-        df_melted = df_merged.melt(id_vars=["Capteur", "Statut global"],
-                                   value_vars=["% Données présentes (Principal)", "% Données présentes (Comparaison)"],
-                                   var_name="Fichier", value_name="% Présentes")
-        sns.barplot(data=df_melted, x="Capteur", y="% Présentes", hue="Fichier", ax=ax2)
-        plt.title("Comparaison de complétude par capteur")
-        plt.xticks(rotation=45, ha='right')
-        plt.ylim(0, 100)
-        plt.tight_layout()
-        st.pyplot(fig2)
+    df_merged = pd.merge(stats_main, stats_compare, on="Capteur", how="outer", suffixes=(" (Principal)", " (Comparaison)"))
+    df_merged = df_merged.fillna({"% Données présentes (Principal)": 0, "% Données présentes (Comparaison)": 0})
 
-    st.subheader("📤 Export des résultats")
-    export_df = df_merged if compare_file else stats_main
-    csv = export_df.to_csv(index=False).encode('utf-8')
-    st.download_button("📥 Télécharger le rapport (CSV)", csv, file_name="rapport_capteurs.csv", mime="text/csv")
+    def statut_global(row):
+        if row['% Données présentes (Principal)'] == 0 and row['% Données présentes (Comparaison)'] == 0:
+            return "🔴"
+        elif row['% Données présentes (Principal)'] == 100 and row['% Données présentes (Comparaison)'] == 100:
+            return "🟢"
+        else:
+            return "🟠"
+
+    df_merged["Statut global"] = df_merged.apply(statut_global, axis=1)
+    st.dataframe(df_merged, use_container_width=True)
+
+    fig2, ax2 = plt.subplots(figsize=(14, 5))
+    df_melted = df_merged.melt(
+        id_vars=["Capteur", "Statut global"],
+        value_vars=["% Données présentes (Principal)", "% Données présentes (Comparaison)"],
+        var_name="Fichier", value_name="% Présentes"
+    )
+    sns.barplot(data=df_melted, x="Capteur", y="% Présentes", hue="Fichier", ax=ax2)
+    plt.title("Comparaison de complétude par capteur")
+    plt.xticks(rotation=45, ha='right')
+    plt.ylim(0, 100)
+    plt.tight_layout()
+    st.pyplot(fig2)
+
+    export_df = df_merged
 else:
-    st.info("Veuillez téléverser au minimum un fichier pour lancer l'analyse.")
+    export_df = stats_main
+    st.info("Veuillez téléverser un deuxième fichier si vous souhaitez effectuer une comparaison.")
+
+# ✅ Export final (toujours affiché si fichier principal analysé)
+st.subheader("📤 Export des résultats")
+csv = export_df.to_csv(index=False).encode('utf-8')
+st.download_button("📥 Télécharger le rapport (CSV)", csv, file_name="rapport_capteurs.csv", mime="text/csv")
