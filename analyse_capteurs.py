@@ -138,6 +138,16 @@ else:
     export_df = stats_main
     st.info("Veuillez téléverser un deuxième fichier si vous souhaitez effectuer une comparaison.")
 
+# 🔍 Vérifier les capteurs manquants dans l'un ou l'autre fichier
+capteurs_main = set(stats_main["Capteur"])
+capteurs_compare = set(stats_compare["Capteur"])
+capteurs_manquants = capteurs_main.symmetric_difference(capteurs_compare)
+
+if capteurs_manquants:
+    st.warning(f"⚠️ Capteurs non communs entre les deux fichiers : {', '.join(capteurs_manquants)}")
+else:
+    st.success("✅ Tous les capteurs sont présents dans les deux fichiers.")
+
 # ✅ Export final (toujours affiché si fichier principal analysé)
 st.subheader("📤 Export des résultats")
 csv = export_df.to_csv(index=False).encode('utf-8')
