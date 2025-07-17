@@ -29,6 +29,11 @@ def charger_et_resampler(fichier, nom):
     df = df.dropna(subset=["timestamp"]).sort_values("timestamp").reset_index(drop=True)
     return df
 
+# --- Vérification du fichier principal ---
+if not main_file:
+    st.warning("📁 Veuillez téléverser un fichier principal pour commencer l’analyse.")
+    st.stop()
+    
 # --- Analyse simple ---
 def analyse_simplifiee(df):
     st.subheader("📌 Présentes vs Manquantes – Méthode simple")
