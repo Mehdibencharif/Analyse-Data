@@ -27,11 +27,36 @@ def charger_et_resampler(fichier, nom):
     df = df.rename(columns={df.columns[0]: "timestamp"})
     df["timestamp"] = pd.to_datetime(df["timestamp"], errors='coerce')
     df = df.dropna(subset=["timestamp"]).sort_values("timestamp").reset_index(drop=True)
-    df = df.set_index("timestamp").resample(rule_map[frequence]).mean()
     return df
 
-# --- Analyse de complétude ---
+# --- Analyse simple ---
+def analyse_simplifiee(df):
+    st.subheader("📌 Présentes vs Manquantes – Méthode simple")
+    total = len(df)
+    resume = []
+    for col in df.columns:
+        if col.lower() in ['timestamp', 'notes']:
+            continue
+        presente = df[col].notna().sum()
+        pct = 100 * presente / total if total > 0 else 0
+        statut = "🟢" if pct == 100 else ("🟠" if pct > 0 else "🔴")
+        resume.append({"Capteur": col, "Présentes": presente, "% Présentes": round(pct, 2), "Statut": statut})
+    df_resume = pd.DataFrame(resume)
+    st.dataframe(df_resume, use_container_width=True)
+
+    # Graphique
+    fig, ax = plt.subplots(figsize=(12, 6))
+    df_resume.set_index("Capteur")["% Présentes"].plot(kind="bar", ax=ax, color="skyblue")
+    plt.ylabel("% Présentes")
+    plt.title("Pourcentage de données présentes par capteur")
+    plt.xticks(rotation=45, ha='right')
+    plt.tight_layout()
+    st.pyplot(fig)
+    return df_resume
+
+# --- Analyse complète ---
 def analyser_completude(df):
+    df = df.set_index("timestamp").resample(rule_map[frequence]).mean()
     total = len(df)
     resultat = []
     for col in df.columns:
@@ -41,11 +66,14 @@ def analyser_completude(df):
         resultat.append({"Capteur": col, "% Données présentes": round(pct, 2), "Statut": statut})
     return pd.DataFrame(resultat)
 
-# --- Affichage ---
+# --- Traitement ---
 if main_file:
-    st.subheader("📂 Analyse du fichier principal")
+    st.subheader("📂 Fichier principal : Analyse simplifiée")
     df_main = charger_et_resampler(main_file, "Fichier principal")
-    stats_main = analyser_completude(df_main)
+    df_simple = analyse_simplifiee(df_main)
+
+    st.subheader("📈 Analyse rééchantillonnée selon la fréquence choisie")
+    stats_main = analyser_completude(df_main.reset_index())
     st.dataframe(stats_main, use_container_width=True)
 
     # Graphique
@@ -57,16 +85,15 @@ if main_file:
     plt.tight_layout()
     st.pyplot(fig1)
 
-    # --- Comparaison ---
     if compare_file:
         st.subheader("🔁 Comparaison avec un deuxième fichier")
         df_compare = charger_et_resampler(compare_file, "Fichier comparaison")
-        stats_compare = analyser_completude(df_compare)
+        df_compare_resample = df_compare.set_index("timestamp").resample(rule_map[frequence]).mean().reset_index()
+        stats_compare = analyser_completude(df_compare_resample)
 
         df_merged = pd.merge(stats_main, stats_compare, on="Capteur", how="outer", suffixes=(" (Principal)", " (Comparaison)"))
         df_merged = df_merged.fillna({"% Données présentes (Principal)": 0, "% Données présentes (Comparaison)": 0})
 
-        # Recalculer le statut général
         def statut_global(row):
             if row['% Données présentes (Principal)'] == 0 and row['% Données présentes (Comparaison)'] == 0:
                 return "🔴"
@@ -78,7 +105,6 @@ if main_file:
         df_merged["Statut global"] = df_merged.apply(statut_global, axis=1)
         st.dataframe(df_merged, use_container_width=True)
 
-        # Graphique comparatif
         fig2, ax2 = plt.subplots(figsize=(14, 5))
         df_melted = df_merged.melt(id_vars=["Capteur", "Statut global"],
                                    value_vars=["% Données présentes (Principal)", "% Données présentes (Comparaison)"],
@@ -90,11 +116,9 @@ if main_file:
         plt.tight_layout()
         st.pyplot(fig2)
 
-    # --- Export CSV ---
     st.subheader("📤 Export des résultats")
     export_df = df_merged if compare_file else stats_main
     csv = export_df.to_csv(index=False).encode('utf-8')
     st.download_button("📥 Télécharger le rapport (CSV)", csv, file_name="rapport_capteurs.csv", mime="text/csv")
-
 else:
     st.info("Veuillez téléverser au minimum un fichier pour lancer l'analyse.")
