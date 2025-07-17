@@ -84,12 +84,11 @@ if main_file:
     plt.ylim(0, 100)
     plt.tight_layout()
     st.pyplot(fig1)
-
- if compare_file:
+# ----- Comparaison 
+if compare_file:
     st.subheader("🔁 Comparaison avec un deuxième fichier")
     df_compare = charger_et_resampler(compare_file, "Fichier comparaison")
 
-    # 🔧 Corriger ici : ne garder que les colonnes numériques pour le resampling
     if "timestamp" not in df_compare.columns:
         st.error("Le fichier de comparaison ne contient pas de colonne 'timestamp'.")
         st.stop()
@@ -133,22 +132,24 @@ if main_file:
     plt.tight_layout()
     st.pyplot(fig2)
 
+    # 🔍 Vérifier les capteurs manquants
+    capteurs_main = set(stats_main["Capteur"])
+    capteurs_compare = set(stats_compare["Capteur"])
+    capteurs_manquants = capteurs_main.symmetric_difference(capteurs_compare)
+
+    if capteurs_manquants:
+        st.warning(f"⚠️ Capteurs non communs entre les deux fichiers : {', '.join(capteurs_manquants)}")
+    else:
+        st.success("✅ Tous les capteurs sont présents dans les deux fichiers.")
+
     export_df = df_merged
+
 else:
     export_df = stats_main
     st.info("Veuillez téléverser un deuxième fichier si vous souhaitez effectuer une comparaison.")
-
-# 🔍 Vérifier les capteurs manquants dans l'un ou l'autre fichier
-capteurs_main = set(stats_main["Capteur"])
-capteurs_compare = set(stats_compare["Capteur"])
-capteurs_manquants = capteurs_main.symmetric_difference(capteurs_compare)
-
-if capteurs_manquants:
-    st.warning(f"⚠️ Capteurs non communs entre les deux fichiers : {', '.join(capteurs_manquants)}")
-else:
-    st.success("✅ Tous les capteurs sont présents dans les deux fichiers.")
 
 # ✅ Export final (toujours affiché si fichier principal analysé)
 st.subheader("📤 Export des résultats")
 csv = export_df.to_csv(index=False).encode('utf-8')
 st.download_button("📥 Télécharger le rapport (CSV)", csv, file_name="rapport_capteurs.csv", mime="text/csv")
+
