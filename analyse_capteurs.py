@@ -103,7 +103,7 @@ if compare_file:
     try:
         df_compare = pd.read_excel(compare_file)
         # Remplacer "Nom" par le nom exact de la colonne contenant les capteurs attendus
-        capteurs_reference = set(df_compare["Nom"].astype(str).str.strip())
+        capteurs_reference = set(df_compare["Description"].astype(str).str.strip())
     except Exception as e:
         st.error(f"Erreur lors de la lecture du fichier de comparaison : {str(e)}")
         st.stop()
