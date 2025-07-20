@@ -133,18 +133,6 @@ plt.ylim(0, 100)
 plt.tight_layout()
 st.pyplot(fig1)
 
-# --- Lecture de la liste de capteurs attendus (si fichier de comparaison fourni) ---
-capteurs_reference = None
-if compare_file:
-    try:
-        df_compare = pd.read_excel(compare_file)
-        capteurs_reference = set(df_compare["Nom"].astype(str).str.strip())  # Remplace "Nom" par le bon nom de colonne
-    except Exception as e:
-        st.error(f"Erreur lors de la lecture du fichier de comparaison : {str(e)}")
-        st.stop()
-
-# --- Analyse simplifiée avec ou sans validation
-df_simple = analyse_simplifiee(df_main, capteurs_reference)
 
 # ✅ Export final
 st.subheader("📤 Export des résultats")
