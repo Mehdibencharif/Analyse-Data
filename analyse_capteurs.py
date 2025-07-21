@@ -96,57 +96,55 @@ def analyse_simplifiee(df, capteurs_reference=None):
     return df_resume
  
 
-    # 🔁 Ajouter la colonne Doublon
-    df_resume["Doublon"] = df_resume["Capteur"].duplicated(keep=False).map({True: "🔁 Oui", False: "✅ Non"})
+  # 🔁 Vérification des doublons
+df_resume["Capteur"] = df_resume["Capteur"].astype(str).str.strip()
+df_resume["Doublon"] = df_resume["Capteur"].duplicated(keep=False).map({True: "🔁 Oui", False: "✅ Non"})
 
-    # 🔍 Validation des capteurs
-    if capteurs_reference is not None and len(capteurs_reference) > 0:
-        # Nettoyage
-        df_resume["Capteur"] = df_resume["Capteur"].astype(str).str.strip()
-        capteurs_reference_cleaned = {c.strip() for c in capteurs_reference}
+# 🔍 Validation selon référence
+if capteurs_reference is not None and len(capteurs_reference) > 0:
+    capteurs_reference_cleaned = {c.strip() for c in capteurs_reference}
 
-        df_resume["Dans la référence"] = df_resume["Capteur"].apply(
-            lambda capteur: "✅ Oui" if capteur in capteurs_reference_cleaned else "❌ Non"
-        )
+    df_resume["Dans la référence"] = df_resume["Capteur"].apply(
+        lambda capteur: "✅ Oui" if capteur in capteurs_reference_cleaned else "❌ Non"
+    )
 
-        st.subheader("📋 Validation des capteurs analysés")
-        st.markdown("""
-        ### 🧾 Légende des colonnes :
-        - ✅ : Présence / Unicité confirmée  
-        - ❌ : Capteur non trouvé dans la référence  
-        - 🔁 : Capteur dupliqué
-        """)
-        st.dataframe(df_resume[["Capteur", "Dans la référence", "Doublon"]], use_container_width=True)
+    st.subheader("📋 Validation des capteurs analysés")
+    st.markdown("""
+    ### 🧾 Légende des colonnes :
+    - ✅ : Présence confirmée dans la référence  
+    - ❌ : Absent de la référence  
+    - 🔁 : Capteur dupliqué dans le fichier principal
+    """)
+    st.dataframe(df_resume[["Capteur", "Dans la référence", "Doublon"]], use_container_width=True)
 
-        # 🔎 Capteurs attendus mais absents
-        capteurs_trouves = set(df_resume["Capteur"])
-        manquants = sorted(capteurs_reference_cleaned - capteurs_trouves)
-        if manquants:
-            st.subheader("📌 Capteurs attendus non trouvés dans les données analysées")
-            st.markdown("Voici les capteurs présents dans le fichier de référence mais absents du fichier principal :")
-            st.write(manquants)
-        else:
-            st.markdown("✅ Tous les capteurs attendus sont présents dans les données.")
+    # 🔎 Capteurs attendus mais absents
+    capteurs_trouves = set(df_resume["Capteur"])
+    manquants = sorted(capteurs_reference_cleaned - capteurs_trouves)
+    if manquants:
+        st.subheader("📌 Capteurs attendus non trouvés dans les données analysées")
+        st.markdown("Voici les capteurs présents dans le fichier de référence mais absents du fichier principal :")
+        st.write(manquants)
     else:
-        st.subheader("📋 Validation des capteurs analysés")
-        st.markdown("⚠️ Aucune référence fournie. Affichage des doublons uniquement.")
-        st.dataframe(df_resume[["Capteur", "Doublon"]], use_container_width=True)
+        st.markdown("✅ Tous les capteurs attendus sont présents dans les données.")
+else:
+    st.subheader("📋 Validation des capteurs analysés")
+    st.markdown("⚠️ Aucune référence fournie. Affichage des doublons uniquement.")
+    st.dataframe(df_resume[["Capteur", "Doublon"]], use_container_width=True)
+
 
     return df_resume
 
 
-# --- Analyse complète : rééchantillonnage temporel et complétude ---
+# --- Analyse de complétude sans rééchantillonnage ---
 def analyser_completude(df):
     if "timestamp" not in df.columns:
-        st.error("❌ La colonne 'timestamp' est manquante pour effectuer le rééchantillonnage.")
+        st.error("❌ La colonne 'timestamp' est manquante.")
         return pd.DataFrame()
-
-    df = df.set_index("timestamp").resample(rule_map[frequence]).mean()
 
     total = len(df)
     resultat = []
 
-    for col in df.columns:
+    for col in df.select_dtypes(include="number").columns:
         presente = df[col].notna().sum()
         manquantes = total - presente
         pct_presente = 100 * presente / total if total > 0 else 0
@@ -155,19 +153,18 @@ def analyser_completude(df):
 
         resultat.append({
             "Capteur": col.strip(),
-            "Présentes": presente,
+            "Présentes": int(presente),
             "% Présentes": round(pct_presente, 2),
-            "Manquantes": manquantes,
+            "Manquantes": int(manquantes),
             "% Manquantes": round(pct_manquantes, 2),
             "Statut": statut
         })
 
     return pd.DataFrame(resultat)
-    
 
 # --- Traitement principal ---
-st.subheader("📂 Fichier principal : Analyse simplifiée")
-df_main = charger_et_resampler(main_file, "Fichier principal")
+st.subheader("📂 Fichier principal : Analyse brute (sans rééchantillonnage)")
+df_main = charger_excel(main_file)  # 💡 suppose une fonction de chargement sans resampling
 
 # --- Lecture de la liste de capteurs attendus (si fichier de comparaison fourni) ---
 capteurs_reference = None
@@ -180,17 +177,14 @@ if compare_file:
         st.error(f"❌ Erreur lors de la lecture du fichier de comparaison : {str(e)}")
         st.stop()
 else:
-    st.warning("⚠️ Aucun fichier de comparaison n'a été téléversé. La validation ne sera pas effectuée.")
-    capteurs_reference = set()
+    st.warning("⚠️ Aucun fichier de comparaison n'a été téléversé.")
 
-
-
-# --- Analyse simplifiée avec ou sans validation
+# --- Analyse simplifiée avec validation
 df_simple = analyse_simplifiee(df_main, capteurs_reference)
 
-# --- Analyse rééchantillonnée selon la fréquence choisie ---
-st.subheader("📈 Analyse rééchantillonnée selon la fréquence choisie")
-stats_main = analyser_completude(df_main.reset_index())
+# --- Analyse brute sans rééchantillonnage ---
+st.subheader("📈 Analyse de complétude des données brutes")
+stats_main = analyser_completude(df_main)
 st.dataframe(stats_main, use_container_width=True)
 
 # 🧾 Légende des statuts
@@ -225,12 +219,13 @@ sns.barplot(
     palette={"🟢": "green", "🟠": "orange", "🔴": "red"},
     ax=ax
 )
-plt.title("Complétude des capteurs - Fichier principal", fontsize=14)
+plt.title("Complétude des capteurs - Fichier brut", fontsize=14)
 plt.xlabel("% Données présentes")
 plt.ylabel("Capteur")
 plt.xlim(0, 100)
 plt.tight_layout()
 st.pyplot(fig)
+
 
 
 # ✅ Export final
