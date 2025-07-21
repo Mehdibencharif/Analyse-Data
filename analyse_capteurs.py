@@ -50,7 +50,7 @@ def analyse_simplifiee(df, capteurs_reference=None):
         manquantes = total - presente
         pct_presente = 100 * presente / total if total > 0 else 0
         pct_manquantes = 100 - pct_presente
-        statut = "🟢" if pct_presente == 100 else ("🟠" if pct_presente > 0 else "🔴")
+        statut = "🟢" if pct_presente >= 80 else ("🟠" if pct_presente > 0 else "🔴")
 
         resume.append({
             "Capteur": col.strip(),
@@ -143,7 +143,7 @@ def analyser_completude(df):
         manquantes = total - presente
         pct_presente = 100 * presente / total if total > 0 else 0
         pct_manquantes = 100 - pct_presente
-        statut = "🟢" if pct_presente == 100 else ("🟠" if pct_presente > 0 else "🔴")
+        statut = "🟢" if pct_presente >= 80 else ("🟠" if pct_presente > 0 else "🔴")
 
         resultat.append({
             "Capteur": col.strip(),
