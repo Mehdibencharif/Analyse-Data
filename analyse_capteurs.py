@@ -147,11 +147,7 @@ def analyse_simplifiee(df, capteurs_reference=None):
     - 🟠 : Incomplet (entre 1 % et 79 %)
     - 🔴 : Données absentes (0 %)
     """)
-
-    return df_resume  # ✅ Bien indenté dans la fonction
-
-
-  # 🔁 Vérification des doublons
+# 🔁 Vérification des doublons
 df_resume["Capteur"] = df_resume["Capteur"].astype(str).str.strip()
 df_resume["Doublon"] = df_resume["Capteur"].duplicated(keep=False).map({True: "🔁 Oui", False: "✅ Non"})
 
@@ -185,9 +181,9 @@ else:
     st.subheader("📋 Validation des capteurs analysés")
     st.markdown("⚠️ Aucune référence fournie. Affichage des doublons uniquement.")
     st.dataframe(df_resume[["Capteur", "Doublon"]], use_container_width=True)
+    return df_resume  # ✅ Bien indenté dans la fonction
 
 
-    return df_resume
 
 
 # --- Analyse de complétude sans rééchantillonnage ---
