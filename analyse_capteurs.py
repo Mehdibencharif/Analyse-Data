@@ -66,7 +66,13 @@ def analyse_simplifiee(df, capteurs_reference=None):
             lambda capteur: "✅ Oui" if capteur in capteurs_reference else "❌ Non"
         )
         st.subheader("📋 Validation des capteurs analysés")
-        st.dataframe(df_resume[["Capteur", "Dans la référence"]], use_container_width=True)
+        st.markdown("""
+        ### 🧾 Légende des colonnes :
+        - ✅ : Présence / Unicité confirmée  
+        - ❌ : Capteur non trouvé dans la référence  
+        - 🔁 : Capteur dupliqué
+        """)
+        st.dataframe(df_resume[["Capteur", "Dans la référence", "Doublon"]], use_container_width=True)
     return df_resume
 
 # --- Analyse complète : rééchantillonnage temporel et complétude ---
@@ -102,11 +108,16 @@ capteurs_reference = None
 if compare_file:
     try:
         df_compare = pd.read_excel(compare_file)
-        # Remplacer "Nom" par le nom exact de la colonne contenant les capteurs attendus
         capteurs_reference = set(df_compare["Description"].astype(str).str.strip())
+        st.success("✅ Fichier de comparaison chargé avec succès.")
     except Exception as e:
-        st.error(f"Erreur lors de la lecture du fichier de comparaison : {str(e)}")
+        st.error(f"❌ Erreur lors de la lecture du fichier de comparaison : {str(e)}")
         st.stop()
+else:
+    st.warning("⚠️ Aucun fichier de comparaison n'a été téléversé. La validation ne sera pas effectuée.")
+    capteurs_reference = set()
+
+
 
 # --- Analyse simplifiée avec ou sans validation
 df_simple = analyse_simplifiee(df_main, capteurs_reference)
