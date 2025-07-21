@@ -60,8 +60,11 @@ def analyse_simplifiee(df, capteurs_reference=None):
     plt.tight_layout()
     st.pyplot(fig)
     
-    # 🔍 Vérification : est-ce que chaque capteur analysé est dans la référence ?
-    if capteurs_reference is not None:
+     # 🔁 Ajouter la colonne Doublon (capteurs dupliqués dans le tableau)
+    df_resume["Doublon"] = df_resume["Capteur"].duplicated(keep=False).map({True: "🔁 Oui", False: "✅ Non"})
+
+    # 🔍 Vérification : est-ce que chaque capteur est dans la référence ?
+    if capteurs_reference is not None and len(capteurs_reference) > 0:
         df_resume["Dans la référence"] = df_resume["Capteur"].apply(
             lambda capteur: "✅ Oui" if capteur in capteurs_reference else "❌ Non"
         )
@@ -73,6 +76,11 @@ def analyse_simplifiee(df, capteurs_reference=None):
         - 🔁 : Capteur dupliqué
         """)
         st.dataframe(df_resume[["Capteur", "Dans la référence", "Doublon"]], use_container_width=True)
+    else:
+        st.subheader("📋 Validation des capteurs analysés")
+        st.markdown("⚠️ Aucune référence fournie. Affichage des doublons uniquement.")
+        st.dataframe(df_resume[["Capteur", "Doublon"]], use_container_width=True)
+
     return df_resume
 
 # --- Analyse complète : rééchantillonnage temporel et complétude ---
