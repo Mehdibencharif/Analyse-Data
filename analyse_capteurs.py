@@ -5,36 +5,57 @@ import seaborn as sns
 from io import BytesIO
 from datetime import timedelta
 
-#-------------Configuration de la page Streamlit
+# ------------- Configuration de la page Streamlit -------------
 st.set_page_config(page_title="Analyse de données capteurs", layout="wide")
-st.title("Analyse de données capteurs")
+st.title("📊 Analyse de données capteurs")
 
-
-# --- Paramètres Fréquence d'analyse ---
+# ------------- Paramètres de fréquence d'analyse -------------
 st.sidebar.header("Paramètres d'analyse")
-frequence = st.sidebar.selectbox("Choisissez la fréquence d'analyse :", ["1min", "5min", "10min", "15min", "1H"])
-rule_map = {"1min": "1min", "5min": "5min", "10min": "10min", "15min": "15min", "1H": "1H"}
+frequence = st.sidebar.selectbox(
+    "Choisissez la fréquence d'analyse :",
+    ["1min", "5min", "10min", "15min", "1H"]
+)
+rule_map = {
+    "1min": "1min",
+    "5min": "5min",
+    "10min": "10min",
+    "15min": "15min",
+    "1H": "1H"
+}
 
-# --- Fichiers à téléverser ---
+# ------------- Téléversement des fichiers -------------
 st.sidebar.subheader("Téléversement des fichiers")
-main_file = st.sidebar.file_uploader("Fichier principal (obligatoire)", type=[".xlsx", ".xls", ".xlsm"], key="main")
-compare_file = st.sidebar.file_uploader("Fichier de comparaison (facultatif)", type=[".xlsx", ".xls", ".xlsm"], key="compare")
+main_file = st.sidebar.file_uploader(
+    "📂 Fichier principal (obligatoire)",
+    type=[".xlsx", ".xls", ".xlsm"],
+    key="main"
+)
+compare_file = st.sidebar.file_uploader(
+    "📂 Fichier de comparaison (facultatif)",
+    type=[".xlsx", ".xls", ".xlsm"],
+    key="compare"
+)
 
-# --- Fonction d'importation et prétraitement ---
-def charger_et_resampler(fichier, nom):
+# ------------- Fonction de chargement de fichier -------------
+def charger_et_resampler(fichier, nom_fichier):
     xls = pd.ExcelFile(fichier)
-    feuille = xls.sheet_names[0] if len(xls.sheet_names) == 1 else st.selectbox(f"Feuille à utiliser pour {nom}", xls.sheet_names, key=nom)
+    feuille = xls.sheet_names[0] if len(xls.sheet_names) == 1 else st.selectbox(
+        f"📄 Feuille à utiliser pour {nom_fichier}",
+        xls.sheet_names,
+        key=nom_fichier
+    )
     df = pd.read_excel(xls, sheet_name=feuille)
     df.columns = [str(c).strip() for c in df.columns]
     df = df.rename(columns={df.columns[0]: "timestamp"})
-    df["timestamp"] = pd.to_datetime(df["timestamp"], errors='coerce')
+    df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
     df = df.dropna(subset=["timestamp"]).sort_values("timestamp").reset_index(drop=True)
     return df
 
-# --- Vérification du fichier principal ---
+# ------------- Vérification de la présence du fichier principal -------------
 if not main_file:
-    st.warning("📁 Veuillez téléverser un fichier principal pour commencer l’analyse.")
+    st.warning("⚠️ Veuillez téléverser un fichier principal pour démarrer l’analyse.")
     st.stop()
+    
     
 # --- Analyse simple ---
 def analyse_simplifiee(df, capteurs_reference=None):
