@@ -113,16 +113,16 @@ def analyser_completude(df):
 
     for col in df.columns:
        presente = df[col].notna().sum()
-manquantes = total - presente
-pct = 100 * presente / total if total > 0 else 0
-statut = "🟢" if pct == 100 else ("🟠" if pct > 0 else "🔴")
-resume.append({
-    "Capteur": col.strip(),
-    "Présentes": presente,
-    "Manquantes": manquantes,
-    "% Présentes": round(pct, 2),
-    "Statut": statut
-})
+       manquantes = total - presente
+       pct = 100 * presente / total if total > 0 else 0
+       statut = "🟢" if pct == 100 else ("🟠" if pct > 0 else "🔴")
+       resume.append({
+       "Capteur": col.strip(),
+       "Présentes": presente,
+       "Manquantes": manquantes,
+       "% Présentes": round(pct, 2),
+        "Statut": statut
+    })
     return pd.DataFrame(resultat)
     
 
