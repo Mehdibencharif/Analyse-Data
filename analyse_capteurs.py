@@ -163,7 +163,7 @@ fig1, ax1 = plt.subplots(figsize=(12, 5))
 sns.barplot(
     data=stats_main,
     x="Capteur",
-    y="% Données présentes",
+    y="% Présentes",  # ✅ correspond bien à la colonne du nouveau DataFrame
     hue="Statut",
     dodge=False,
     palette={"🟢": "green", "🟠": "orange", "🔴": "red"},
