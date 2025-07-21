@@ -108,15 +108,15 @@ def analyse_simplifiee(df, capteurs_reference=None):
 
     return df_resume  # ✅ doit être à l’intérieur de la fonction, bien indenté
 
-# 🔁 Vérification des doublons
-df_resume["Capteur"] = df_resume["Capteur"].astype(str).str.strip()
-df_resume["Doublon"] = df_resume["Capteur"].duplicated(keep=False).map({True: "🔁 Oui", False: "✅ Non"})
+# 🔁 Nettoyage et vérification des doublons
+df_simple["Capteur"] = df_simple["Capteur"].astype(str).str.strip()
+df_simple["Doublon"] = df_simple["Capteur"].duplicated(keep=False).map({True: "🔁 Oui", False: "✅ Non"})
 
-# 🔍 Validation selon référence
+# 🔍 Validation selon la référence (si fournie)
 if capteurs_reference is not None and len(capteurs_reference) > 0:
     capteurs_reference_cleaned = {c.strip() for c in capteurs_reference}
 
-    df_resume["Dans la référence"] = df_resume["Capteur"].apply(
+    df_simple["Dans la référence"] = df_simple["Capteur"].apply(
         lambda capteur: "✅ Oui" if capteur in capteurs_reference_cleaned else "❌ Non"
     )
 
@@ -127,10 +127,10 @@ if capteurs_reference is not None and len(capteurs_reference) > 0:
     - ❌ : Absent de la référence  
     - 🔁 : Capteur dupliqué dans le fichier principal
     """)
-    st.dataframe(df_resume[["Capteur", "Dans la référence", "Doublon"]], use_container_width=True)
+    st.dataframe(df_simple[["Capteur", "Dans la référence", "Doublon"]], use_container_width=True)
 
     # 🔎 Capteurs attendus mais absents
-    capteurs_trouves = set(df_resume["Capteur"])
+    capteurs_trouves = set(df_simple["Capteur"])
     manquants = sorted(capteurs_reference_cleaned - capteurs_trouves)
     if manquants:
         st.subheader("📌 Capteurs attendus non trouvés dans les données analysées")
@@ -141,7 +141,7 @@ if capteurs_reference is not None and len(capteurs_reference) > 0:
 else:
     st.subheader("📋 Validation des capteurs analysés")
     st.markdown("⚠️ Aucune référence fournie. Affichage des doublons uniquement.")
-    st.dataframe(df_resume[["Capteur", "Doublon"]], use_container_width=True)
+    st.dataframe(df_simple[["Capteur", "Doublon"]], use_container_width=True)
 
 
 # --- Analyse de complétude sans rééchantillonnage ---
