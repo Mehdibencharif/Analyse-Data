@@ -154,7 +154,9 @@ else:
 df_simple = analyse_simplifiee(df_main, capteurs_reference)
 
 # --- Analyse rééchantillonnée selon la fréquence choisie ---
-# --- Graphique horizontal de complétude par capteur ---
+st.subheader("📈 Analyse rééchantillonnée selon la fréquence choisie")
+stats_main = analyser_completude(df_main.reset_index())  # 👈 définie ici
+st.dataframe(stats_main, use_container_width=True)
 fig, ax = plt.subplots(figsize=(10, max(6, len(stats_main) * 0.25)))  # Hauteur dynamique
 
 df_plot = stats_main.sort_values(by="% Présentes", ascending=True)  # Tri du moins au plus complet
