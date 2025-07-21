@@ -38,7 +38,7 @@ if not main_file:
     
 # --- Analyse simple ---
 def analyse_simplifiee(df, capteurs_reference=None):
-    st.subheader("Présentes vs Manquantes – Méthode simple")
+    st.subheader("📌 Présentes vs Manquantes – Méthode simple")
     total = len(df)
     resume = []
     for col in df.columns:
@@ -47,11 +47,12 @@ def analyse_simplifiee(df, capteurs_reference=None):
         presente = df[col].notna().sum()
         pct = 100 * presente / total if total > 0 else 0
         statut = "🟢" if pct == 100 else ("🟠" if pct > 0 else "🔴")
-        resume.append({"Capteur": col, "Présentes": presente, "% Présentes": round(pct, 2), "Statut": statut})
+        resume.append({"Capteur": col.strip(), "Présentes": presente, "% Présentes": round(pct, 2), "Statut": statut})
     df_resume = pd.DataFrame(resume)
+
     st.dataframe(df_resume, use_container_width=True)
 
-    # Graphique
+    # 📊 Graphique
     fig, ax = plt.subplots(figsize=(12, 6))
     df_resume.set_index("Capteur")["% Présentes"].plot(kind="bar", ax=ax, color="skyblue")
     plt.ylabel("% Présentes")
@@ -59,15 +60,20 @@ def analyse_simplifiee(df, capteurs_reference=None):
     plt.xticks(rotation=45, ha='right')
     plt.tight_layout()
     st.pyplot(fig)
-    
-     # 🔁 Ajouter la colonne Doublon (capteurs dupliqués dans le tableau)
+
+    # 🔁 Ajouter la colonne Doublon
     df_resume["Doublon"] = df_resume["Capteur"].duplicated(keep=False).map({True: "🔁 Oui", False: "✅ Non"})
 
-    # 🔍 Vérification : est-ce que chaque capteur est dans la référence ?
+    # 🔍 Validation des capteurs
     if capteurs_reference is not None and len(capteurs_reference) > 0:
+        # Nettoyage
+        df_resume["Capteur"] = df_resume["Capteur"].astype(str).str.strip()
+        capteurs_reference_cleaned = {c.strip() for c in capteurs_reference}
+
         df_resume["Dans la référence"] = df_resume["Capteur"].apply(
-            lambda capteur: "✅ Oui" if capteur in capteurs_reference else "❌ Non"
+            lambda capteur: "✅ Oui" if capteur in capteurs_reference_cleaned else "❌ Non"
         )
+
         st.subheader("📋 Validation des capteurs analysés")
         st.markdown("""
         ### 🧾 Légende des colonnes :
@@ -76,12 +82,23 @@ def analyse_simplifiee(df, capteurs_reference=None):
         - 🔁 : Capteur dupliqué
         """)
         st.dataframe(df_resume[["Capteur", "Dans la référence", "Doublon"]], use_container_width=True)
+
+        # 🔎 Capteurs attendus mais absents
+        capteurs_trouves = set(df_resume["Capteur"])
+        manquants = sorted(capteurs_reference_cleaned - capteurs_trouves)
+        if manquants:
+            st.subheader("📌 Capteurs attendus non trouvés dans les données analysées")
+            st.markdown("Voici les capteurs présents dans le fichier de référence mais absents du fichier principal :")
+            st.write(manquants)
+        else:
+            st.markdown("✅ Tous les capteurs attendus sont présents dans les données.")
     else:
         st.subheader("📋 Validation des capteurs analysés")
         st.markdown("⚠️ Aucune référence fournie. Affichage des doublons uniquement.")
         st.dataframe(df_resume[["Capteur", "Doublon"]], use_container_width=True)
 
     return df_resume
+
 
 # --- Analyse complète : rééchantillonnage temporel et complétude ---
 def analyser_completude(df):
