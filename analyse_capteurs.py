@@ -61,15 +61,27 @@ def analyse_simplifiee(df, capteurs_reference=None):
     df_resume = pd.DataFrame(resume)
 
     st.dataframe(df_resume, use_container_width=True)
+   
+   # Graphique horizontal
+   df_plot = df_resume.sort_values(by="% Présentes", ascending=True)
 
-    # 📊 Graphique
-    fig, ax = plt.subplots(figsize=(12, 6))
-    df_resume.set_index("Capteur")["% Présentes"].plot(kind="bar", ax=ax, color="skyblue")
-    plt.ylabel("% Présentes")
-    plt.title("Pourcentage de données présentes par capteur")
-    plt.xticks(rotation=45, ha='right')
-    plt.tight_layout()
-    st.pyplot(fig)
+  fig, ax = plt.subplots(figsize=(10, max(6, len(df_plot) * 0.25)))  # dynamique
+  sns.barplot(
+    data=df_plot,
+    y="Capteur",
+    x="% Présentes",
+    hue="Statut",
+    dodge=False,
+    palette={"🟢": "green", "🟠": "orange", "🔴": "red"},
+    ax=ax
+ )
+  plt.title("Pourcentage de données présentes par capteur", fontsize=14)
+  plt.xlabel("% Présentes")
+  plt.ylabel("Capteur")
+  plt.xlim(0, 100)
+  plt.tight_layout()
+  st.pyplot(fig)
+ 
 
     # 🔁 Ajouter la colonne Doublon
     df_resume["Doublon"] = df_resume["Capteur"].duplicated(keep=False).map({True: "🔁 Oui", False: "✅ Non"})
