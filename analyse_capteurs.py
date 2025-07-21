@@ -190,22 +190,41 @@ df_simple = analyse_simplifiee(df_main, capteurs_reference)
 
 # --- Analyse rééchantillonnée selon la fréquence choisie ---
 st.subheader("📈 Analyse rééchantillonnée selon la fréquence choisie")
-stats_main = analyser_completude(df_main.reset_index())  # 👈 définie ici
+stats_main = analyser_completude(df_main.reset_index())
 st.dataframe(stats_main, use_container_width=True)
-fig, ax = plt.subplots(figsize=(10, max(6, len(stats_main) * 0.25)))  # Hauteur dynamique
 
-df_plot = stats_main.sort_values(by="% Présentes", ascending=True)  # Tri du moins au plus complet
+# 🧾 Légende des statuts
+st.markdown("""
+### 🧾 Légende des statuts :
+- 🟢 : Capteur exploitable (≥ 80 %)
+- 🟠 : Incomplet (entre 1 % et 79 %)
+- 🔴 : Données absentes (0 %)
+""")
 
+# 🔢 Résumé par statut
+count_vert = stats_main["Statut"].value_counts().get("🟢", 0)
+count_orange = stats_main["Statut"].value_counts().get("🟠", 0)
+count_rouge = stats_main["Statut"].value_counts().get("🔴", 0)
+
+st.markdown(f"""
+**Résumé des capteurs :**
+- ✔️ Capteurs exploitables (🟢) : `{count_vert}`
+- ⚠️ Capteurs incomplets (🟠) : `{count_orange}`
+- ❌ Capteurs vides (🔴) : `{count_rouge}`
+""")
+
+# 📊 Graphique horizontal
+df_plot = stats_main.sort_values(by="% Présentes", ascending=True)
+fig, ax = plt.subplots(figsize=(10, max(6, len(df_plot) * 0.25)))
 sns.barplot(
     data=df_plot,
-    y="Capteur",               # ✅ Capteurs sur l'axe vertical
-    x="% Présentes",           # ✅ Pourcentage sur l'axe horizontal
+    y="Capteur",
+    x="% Présentes",
     hue="Statut",
     dodge=False,
     palette={"🟢": "green", "🟠": "orange", "🔴": "red"},
     ax=ax
 )
-
 plt.title("Complétude des capteurs - Fichier principal", fontsize=14)
 plt.xlabel("% Données présentes")
 plt.ylabel("Capteur")
