@@ -41,23 +41,24 @@ def analyse_simplifiee(df, capteurs_reference=None):
     st.subheader("Présentes vs Manquantes – Méthode simple")
     total = len(df)
     resume = []
-    for col in df.columns:
+ for col in df.columns:
         if col.lower() in ['timestamp', 'notes']:
             continue
-        presente = df[col].notna().sum()
-       manquantes = total - presente
-       pct_presente = 100 * presente / total if total > 0 else 0
-       pct_manquantes = 100 - pct_presente
-       statut = "🟢" if pct_presente == 100 else ("🟠" if pct_presente > 0 else "🔴")
 
-      resume.append({
-      "Capteur": col.strip(),
-     "Présentes": presente,
-     "% Présentes": round(pct_presente, 2),
-     "Manquantes": manquantes,
-     "% Manquantes": round(pct_manquantes, 2),
-     "Statut": statut
-    })
+        presente = df[col].notna().sum()
+        manquantes = total - presente
+        pct_presente = 100 * presente / total if total > 0 else 0
+        pct_manquantes = 100 - pct_presente
+        statut = "🟢" if pct_presente == 100 else ("🟠" if pct_presente > 0 else "🔴")
+
+        resume.append({
+            "Capteur": col.strip(),
+            "Présentes": presente,
+            "% Présentes": round(pct_presente, 2),
+            "Manquantes": manquantes,
+            "% Manquantes": round(pct_manquantes, 2),
+            "Statut": statut
+        })
     df_resume = pd.DataFrame(resume)
 
     st.dataframe(df_resume, use_container_width=True)
