@@ -65,7 +65,15 @@ def analyse_simplifiee(df, capteurs_reference=None):
 
     # 💡 Affichage du tableau
     st.dataframe(df_resume, use_container_width=True)
-
+    
+    # 🧾 Légende des statuts
+    st.markdown("""
+    ### 🧾 Légende des statuts :
+    - 🟢 : Capteur exploitable (≥ 80 %)
+    - 🟠 : Incomplet (entre 1 % et 79 %)
+    - 🔴 : Données absentes (0 %)
+    """)
+    
     # 📊 Graphique horizontal trié
     df_plot = df_resume.sort_values(by="% Présentes", ascending=True)
     fig, ax = plt.subplots(figsize=(10, max(6, len(df_plot) * 0.25)))  # Hauteur dynamique
