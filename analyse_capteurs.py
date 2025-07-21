@@ -41,7 +41,8 @@ def analyse_simplifiee(df, capteurs_reference=None):
     st.subheader("Présentes vs Manquantes – Méthode simple")
     total = len(df)
     resume = []
- for col in df.columns:
+
+    for col in df.columns:
         if col.lower() in ['timestamp', 'notes']:
             continue
 
@@ -59,29 +60,32 @@ def analyse_simplifiee(df, capteurs_reference=None):
             "% Manquantes": round(pct_manquantes, 2),
             "Statut": statut
         })
+
     df_resume = pd.DataFrame(resume)
 
+    # 💡 Affichage du tableau
     st.dataframe(df_resume, use_container_width=True)
-   
-   # Graphique horizontal
-   df_plot = df_resume.sort_values(by="% Présentes", ascending=True)
 
-  fig, ax = plt.subplots(figsize=(10, max(6, len(df_plot) * 0.25)))  # dynamique
-  sns.barplot(
-    data=df_plot,
-    y="Capteur",
-    x="% Présentes",
-    hue="Statut",
-    dodge=False,
-    palette={"🟢": "green", "🟠": "orange", "🔴": "red"},
-    ax=ax
- )
-  plt.title("Pourcentage de données présentes par capteur", fontsize=14)
-  plt.xlabel("% Présentes")
-  plt.ylabel("Capteur")
-  plt.xlim(0, 100)
-  plt.tight_layout()
-  st.pyplot(fig)
+    # 📊 Graphique horizontal trié
+    df_plot = df_resume.sort_values(by="% Présentes", ascending=True)
+    fig, ax = plt.subplots(figsize=(10, max(6, len(df_plot) * 0.25)))  # Hauteur dynamique
+    sns.barplot(
+        data=df_plot,
+        y="Capteur",
+        x="% Présentes",
+        hue="Statut",
+        dodge=False,
+        palette={"🟢": "green", "🟠": "orange", "🔴": "red"},
+        ax=ax
+    )
+    plt.title("Pourcentage de données présentes par capteur", fontsize=14)
+    plt.xlabel("% Présentes")
+    plt.ylabel("Capteur")
+    plt.xlim(0, 100)
+    plt.tight_layout()
+    st.pyplot(fig)
+
+    return df_resume
  
 
     # 🔁 Ajouter la colonne Doublon
