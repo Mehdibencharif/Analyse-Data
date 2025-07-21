@@ -7,7 +7,7 @@ from datetime import timedelta
 
 #-------------Configuration de la page Streamlit
 st.set_page_config(page_title="Analyse de données capteurs", layout="wide")
-st.title("📊 Analyse de données capteurs")
+st.title("Analyse de données capteurs")
 
 
 # --- Paramètres Fréquence d'analyse ---
