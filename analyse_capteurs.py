@@ -1,4 +1,3 @@
-capteurs_reference = None
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -56,8 +55,23 @@ def charger_et_resampler(fichier, nom_fichier):
 if not main_file:
     st.warning("⚠️ Veuillez téléverser un fichier principal pour démarrer l’analyse.")
     st.stop()
-    
-    
+
+# 📥 Chargement du fichier principal
+df_main = charger_et_resampler(main_file, "Fichier principal")
+
+# 📑 Lecture du fichier de comparaison (capteurs attendus)
+capteurs_reference = None
+if compare_file:
+    try:
+        df_compare = pd.read_excel(compare_file)
+        capteurs_reference = set(df_compare["Description"].astype(str).str.strip())
+        st.success("✅ Fichier de comparaison chargé avec succès.")
+    except Exception as e:
+        st.error(f"❌ Erreur lors de la lecture du fichier de comparaison : {str(e)}")
+        st.stop()
+else:
+    st.warning("⚠️ Aucun fichier de comparaison n'a été téléversé.")
+
 # --- Analyse simple ---
 def analyse_simplifiee(df, capteurs_reference=None):
     st.subheader("Présentes vs Manquantes – Méthode simple")
@@ -85,7 +99,7 @@ def analyse_simplifiee(df, capteurs_reference=None):
 
     df_resume = pd.DataFrame(resume)
 
-    # Affichage
+    # Affichage tableau
     st.dataframe(df_resume, use_container_width=True)
 
     # Graphique horizontal
@@ -107,9 +121,9 @@ def analyse_simplifiee(df, capteurs_reference=None):
     plt.tight_layout()
     st.pyplot(fig)
 
-    return df_resume  # ✅ doit être à l’intérieur de la fonction, bien indenté
+    return df_resume
 
-# 📊 Analyse simple avec validation (table + graphique)
+# 📊 Analyse simple avec validation
 df_simple = analyse_simplifiee(df_main, capteurs_reference)
 
 # 🔁 Nettoyage et vérification des doublons
@@ -119,7 +133,6 @@ df_simple["Doublon"] = df_simple["Capteur"].duplicated(keep=False).map({True: "�
 # 🔍 Validation selon la référence (si fournie)
 if capteurs_reference is not None and len(capteurs_reference) > 0:
     capteurs_reference_cleaned = {c.strip() for c in capteurs_reference}
-
     df_simple["Dans la référence"] = df_simple["Capteur"].apply(
         lambda capteur: "✅ Oui" if capteur in capteurs_reference_cleaned else "❌ Non"
     )
@@ -133,7 +146,6 @@ if capteurs_reference is not None and len(capteurs_reference) > 0:
     """)
     st.dataframe(df_simple[["Capteur", "Dans la référence", "Doublon"]], use_container_width=True)
 
-    # 🔎 Capteurs attendus mais absents
     capteurs_trouves = set(df_simple["Capteur"])
     manquants = sorted(capteurs_reference_cleaned - capteurs_trouves)
     if manquants:
@@ -147,33 +159,21 @@ else:
     st.markdown("⚠️ Aucune référence fournie. Affichage des doublons uniquement.")
     st.dataframe(df_simple[["Capteur", "Doublon"]], use_container_width=True)
 
-
 # --- Analyse de complétude sans rééchantillonnage ---
 def analyser_completude(df):
-    # Vérifie que la colonne timestamp est bien présente
     if "timestamp" not in df.columns:
         st.error("❌ La colonne 'timestamp' est manquante.")
         return pd.DataFrame()
 
-    total = len(df)  # Nombre total de lignes (points de mesure)
-    resultat = []    # Liste pour stocker les statistiques par capteur
-
-    # Parcours uniquement les colonnes numériques (capteurs)
+    total = len(df)
+    resultat = []
     for col in df.select_dtypes(include="number").columns:
-        presente = df[col].notna().sum()  # Valeurs présentes (non-NaN)
-        manquantes = total - presente     # Valeurs manquantes
+        presente = df[col].notna().sum()
+        manquantes = total - presente
         pct_presente = 100 * presente / total if total > 0 else 0
         pct_manquantes = 100 - pct_presente
+        statut = "🟢" if pct_presente >= 80 else ("🟠" if pct_presente > 0 else "🔴")
 
-        # Statut visuel selon le pourcentage de présence
-        if pct_presente >= 80:
-            statut = "🟢"
-        elif pct_presente > 0:
-            statut = "🟠"
-        else:
-            statut = "🔴"
-
-        # Ajoute le résumé pour ce capteur
         resultat.append({
             "Capteur": col.strip(),
             "Présentes": int(presente),
@@ -183,30 +183,7 @@ def analyser_completude(df):
             "Statut": statut
         })
 
-    # Retourne un DataFrame avec les résultats
     return pd.DataFrame(resultat)
-    
-# --- Traitement principal ---
-st.subheader("📂 Fichier principal : Analyse brute (sans rééchantillonnage)")
-
-# 📥 Chargement du fichier principal
-df_main = charger_et_resampler(main_file, "Fichier principal")  # ou `charger_excel` si tu en as une version distincte
-
-# 📑 Lecture du fichier de comparaison (capteurs attendus)
-capteurs_reference = None
-if compare_file:
-    try:
-        df_compare = pd.read_excel(compare_file)
-        capteurs_reference = set(df_compare["Description"].astype(str).str.strip())
-        st.success("✅ Fichier de comparaison chargé avec succès.")
-    except Exception as e:
-        st.error(f"❌ Erreur lors de la lecture du fichier de comparaison : {str(e)}")
-        st.stop()
-else:
-    st.warning("⚠️ Aucun fichier de comparaison n'a été téléversé.")
-
-# 📊 Analyse simple avec validation (table + graphique)
-df_simple = analyse_simplifiee(df_main, capteurs_reference)
 
 # 📈 Analyse de complétude sans rééchantillonnage
 st.subheader("📈 Analyse de complétude des données brutes")
@@ -225,7 +202,6 @@ st.markdown("""
 count_vert = stats_main["Statut"].value_counts().get("🟢", 0)
 count_orange = stats_main["Statut"].value_counts().get("🟠", 0)
 count_rouge = stats_main["Statut"].value_counts().get("🔴", 0)
-
 st.markdown(f"""
 **Résumé des capteurs :**
 - ✔️ Capteurs exploitables (🟢) : `{count_vert}`
@@ -233,7 +209,7 @@ st.markdown(f"""
 - ❌ Capteurs vides (🔴) : `{count_rouge}`
 """)
 
-# 📉 Graphique horizontal : pourcentage de données présentes
+# 📉 Graphique horizontal final
 df_plot = stats_main.sort_values(by="% Présentes", ascending=True)
 fig, ax = plt.subplots(figsize=(10, max(6, len(df_plot) * 0.25)))
 sns.barplot(
@@ -252,11 +228,7 @@ plt.xlim(0, 100)
 plt.tight_layout()
 st.pyplot(fig)
 
-
-
-
 # ✅ Export final
 st.subheader("📤 Export des résultats")
 csv = df_simple.to_csv(index=False).encode('utf-8')
 st.download_button("📥 Télécharger le rapport (CSV)", csv, file_name="rapport_capteurs.csv", mime="text/csv")
-
