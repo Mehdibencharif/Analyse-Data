@@ -38,7 +38,7 @@ if not main_file:
     
 # --- Analyse simple ---
 def analyse_simplifiee(df, capteurs_reference=None):
-    st.subheader("📌 Présentes vs Manquantes – Méthode simple")
+    st.subheader("Présentes vs Manquantes – Méthode simple")
     total = len(df)
     resume = []
     for col in df.columns:
