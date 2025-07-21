@@ -108,66 +108,6 @@ def analyse_simplifiee(df, capteurs_reference=None):
 
     return df_resume  # ✅ doit être à l’intérieur de la fonction, bien indenté
 
-    # 🔁 Ajouter la colonne Doublon
-    df_resume["Doublon"] = df_resume["Capteur"].duplicated(keep=False).map({True: "🔁 Oui", False: "✅ Non"})
-
-    # 🔍 Validation si référence disponible
-    if capteurs_reference is not None and len(capteurs_reference) > 0:
-        df_resume["Capteur"] = df_resume["Capteur"].astype(str).str.strip()
-        capteurs_reference_cleaned = {c.strip() for c in capteurs_reference}
-
-        df_resume["Dans la référence"] = df_resume["Capteur"].apply(
-            lambda capteur: "✅ Oui" if capteur in capteurs_reference_cleaned else "❌ Non"
-        )
-
-        st.subheader("📋 Validation des capteurs analysés")
-        st.markdown("""
-        ### 🧾 Légende des colonnes :
-        - ✅ : Présence / Unicité confirmée  
-        - ❌ : Capteur non trouvé dans la référence  
-        - 🔁 : Capteur dupliqué
-        """)
-        st.dataframe(df_resume[["Capteur", "Dans la référence", "Doublon"]], use_container_width=True)
-
-        capteurs_trouves = set(df_resume["Capteur"])
-        manquants = sorted(capteurs_reference_cleaned - capteurs_trouves)
-        if manquants:
-            st.subheader("📌 Capteurs attendus non trouvés dans les données analysées")
-            st.markdown("Voici les capteurs présents dans le fichier de référence mais absents du fichier principal :")
-            st.write(manquants)
-        else:
-            st.markdown("✅ Tous les capteurs attendus sont présents dans les données.")
-    else:
-        st.subheader("📋 Validation des capteurs analysés")
-        st.markdown("⚠️ Aucune référence fournie. Affichage des doublons uniquement.")
-        st.dataframe(df_resume[["Capteur", "Doublon"]], use_container_width=True)
-
-    # 📊 Graphique horizontal
-    df_plot = df_resume.sort_values(by="% Présentes", ascending=True)
-    fig, ax = plt.subplots(figsize=(10, max(6, len(df_plot) * 0.25)))
-    sns.barplot(
-        data=df_plot,
-        y="Capteur",
-        x="% Présentes",
-        hue="Statut",
-        dodge=False,
-        palette={"🟢": "green", "🟠": "orange", "🔴": "red"},
-        ax=ax
-    )
-    plt.title("Pourcentage de données présentes par capteur", fontsize=14)
-    plt.xlabel("% Présentes")
-    plt.ylabel("Capteur")
-    plt.xlim(0, 100)
-    plt.tight_layout()
-    st.pyplot(fig)
-
-    # 🧾 Légende des statuts
-    st.markdown("""
-    ### 🧾 Légende des statuts :
-    - 🟢 : Capteur exploitable (≥ 80 %)
-    - 🟠 : Incomplet (entre 1 % et 79 %)
-    - 🔴 : Données absentes (0 %)
-    """)
 # 🔁 Vérification des doublons
 df_resume["Capteur"] = df_resume["Capteur"].astype(str).str.strip()
 df_resume["Doublon"] = df_resume["Capteur"].duplicated(keep=False).map({True: "🔁 Oui", False: "✅ Non"})
@@ -202,27 +142,34 @@ else:
     st.subheader("📋 Validation des capteurs analysés")
     st.markdown("⚠️ Aucune référence fournie. Affichage des doublons uniquement.")
     st.dataframe(df_resume[["Capteur", "Doublon"]], use_container_width=True)
-    return df_resume  # ✅ Bien indenté dans la fonction
-
-
 
 
 # --- Analyse de complétude sans rééchantillonnage ---
 def analyser_completude(df):
+    # Vérifie que la colonne timestamp est bien présente
     if "timestamp" not in df.columns:
         st.error("❌ La colonne 'timestamp' est manquante.")
         return pd.DataFrame()
 
-    total = len(df)
-    resultat = []
+    total = len(df)  # Nombre total de lignes (points de mesure)
+    resultat = []    # Liste pour stocker les statistiques par capteur
 
+    # Parcours uniquement les colonnes numériques (capteurs)
     for col in df.select_dtypes(include="number").columns:
-        presente = df[col].notna().sum()
-        manquantes = total - presente
+        presente = df[col].notna().sum()  # Valeurs présentes (non-NaN)
+        manquantes = total - presente     # Valeurs manquantes
         pct_presente = 100 * presente / total if total > 0 else 0
         pct_manquantes = 100 - pct_presente
-        statut = "🟢" if pct_presente >= 80 else ("🟠" if pct_presente > 0 else "🔴")
 
+        # Statut visuel selon le pourcentage de présence
+        if pct_presente >= 80:
+            statut = "🟢"
+        elif pct_presente > 0:
+            statut = "🟠"
+        else:
+            statut = "🔴"
+
+        # Ajoute le résumé pour ce capteur
         resultat.append({
             "Capteur": col.strip(),
             "Présentes": int(presente),
@@ -232,13 +179,16 @@ def analyser_completude(df):
             "Statut": statut
         })
 
+    # Retourne un DataFrame avec les résultats
     return pd.DataFrame(resultat)
-
+    
 # --- Traitement principal ---
 st.subheader("📂 Fichier principal : Analyse brute (sans rééchantillonnage)")
-df_main = charger_excel(main_file)  # 💡 suppose une fonction de chargement sans resampling
 
-# --- Lecture de la liste de capteurs attendus (si fichier de comparaison fourni) ---
+# 📥 Chargement du fichier principal
+df_main = charger_et_resampler(main_file, "Fichier principal")  # ou `charger_excel` si tu en as une version distincte
+
+# 📑 Lecture du fichier de comparaison (capteurs attendus)
 capteurs_reference = None
 if compare_file:
     try:
@@ -251,15 +201,15 @@ if compare_file:
 else:
     st.warning("⚠️ Aucun fichier de comparaison n'a été téléversé.")
 
-# --- Analyse simplifiée avec validation
+# 📊 Analyse simple avec validation (table + graphique)
 df_simple = analyse_simplifiee(df_main, capteurs_reference)
 
-# --- Analyse brute sans rééchantillonnage ---
+# 📈 Analyse de complétude sans rééchantillonnage
 st.subheader("📈 Analyse de complétude des données brutes")
 stats_main = analyser_completude(df_main)
 st.dataframe(stats_main, use_container_width=True)
 
-# 🧾 Légende des statuts
+# 📘 Légende des statuts
 st.markdown("""
 ### 🧾 Légende des statuts :
 - 🟢 : Capteur exploitable (≥ 80 %)
@@ -267,7 +217,7 @@ st.markdown("""
 - 🔴 : Données absentes (0 %)
 """)
 
-# 🔢 Résumé par statut
+# 📌 Résumé numérique des capteurs selon statut
 count_vert = stats_main["Statut"].value_counts().get("🟢", 0)
 count_orange = stats_main["Statut"].value_counts().get("🟠", 0)
 count_rouge = stats_main["Statut"].value_counts().get("🔴", 0)
@@ -279,7 +229,7 @@ st.markdown(f"""
 - ❌ Capteurs vides (🔴) : `{count_rouge}`
 """)
 
-# 📊 Graphique horizontal
+# 📉 Graphique horizontal : pourcentage de données présentes
 df_plot = stats_main.sort_values(by="% Présentes", ascending=True)
 fig, ax = plt.subplots(figsize=(10, max(6, len(df_plot) * 0.25)))
 sns.barplot(
@@ -297,6 +247,7 @@ plt.ylabel("Capteur")
 plt.xlim(0, 100)
 plt.tight_layout()
 st.pyplot(fig)
+
 
 
 
