@@ -111,24 +111,23 @@ def analyser_completude(df):
     total = len(df)
     resultat = []
 
-  for col in df.columns:
-    presente = df[col].notna().sum()
-    manquantes = total - presente
-    pct_presente = 100 * presente / total if total > 0 else 0
-    pct_manquantes = 100 - pct_presente
-    statut = "🟢" if pct_presente == 100 else ("🟠" if pct_presente > 0 else "🔴")
+    for col in df.columns:
+        presente = df[col].notna().sum()
+        manquantes = total - presente
+        pct_presente = 100 * presente / total if total > 0 else 0
+        pct_manquantes = 100 - pct_presente
+        statut = "🟢" if pct_presente == 100 else ("🟠" if pct_presente > 0 else "🔴")
 
-    resume.append({
-        "Capteur": col.strip(),
-        "Présentes": presente,
-        "% Présentes": round(pct_presente, 2),
-        "Manquantes": manquantes,
-        "% Manquantes": round(pct_manquantes, 2),
-        "Statut": statut
-    })
+        resultat.append({
+            "Capteur": col.strip(),
+            "Présentes": presente,
+            "% Présentes": round(pct_presente, 2),
+            "Manquantes": manquantes,
+            "% Manquantes": round(pct_manquantes, 2),
+            "Statut": statut
+        })
 
-df_resume = pd.DataFrame(resume)
-return df_resume
+    return pd.DataFrame(resultat)
     
 
 # --- Traitement principal ---
