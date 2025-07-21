@@ -1,3 +1,4 @@
+capteurs_reference = None
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -109,9 +110,16 @@ def analyse_simplifiee(df, capteurs_reference=None):
     return df_resume  # ✅ doit être à l’intérieur de la fonction, bien indenté
 
 # 🔁 Nettoyage et vérification des doublons
+df_simple["Capteur"] = df_simple["Capteur"].astype(str).str.strip()
+df_simple["Doublon"] = df_simple["Capteur"].duplicated(keep=False).map({True: "🔁 Oui", False: "✅ Non"})
+
 # 🔍 Validation selon la référence (si fournie)
 if capteurs_reference is not None and len(capteurs_reference) > 0:
     capteurs_reference_cleaned = {c.strip() for c in capteurs_reference}
+
+    df_simple["Dans la référence"] = df_simple["Capteur"].apply(
+        lambda capteur: "✅ Oui" if capteur in capteurs_reference_cleaned else "❌ Non"
+    )
 
     st.subheader("📋 Validation des capteurs analysés")
     st.markdown("""
@@ -123,6 +131,19 @@ if capteurs_reference is not None and len(capteurs_reference) > 0:
     st.dataframe(df_simple[["Capteur", "Dans la référence", "Doublon"]], use_container_width=True)
 
     # 🔎 Capteurs attendus mais absents
+    capteurs_trouves = set(df_simple["Capteur"])
+    manquants = sorted(capteurs_reference_cleaned - capteurs_trouves)
+    if manquants:
+        st.subheader("📌 Capteurs attendus non trouvés dans les données analysées")
+        st.markdown("Voici les capteurs présents dans le fichier de référence mais absents du fichier principal :")
+        st.write(manquants)
+    else:
+        st.markdown("✅ Tous les capteurs attendus sont présents dans les données.")
+else:
+    st.subheader("📋 Validation des capteurs analysés")
+    st.markdown("⚠️ Aucune référence fournie. Affichage des doublons uniquement.")
+    st.dataframe(df_simple[["Capteur", "Doublon"]], use_container_width=True)
+
 
 # --- Analyse de complétude sans rééchantillonnage ---
 def analyser_completude(df):
@@ -203,10 +224,6 @@ count_orange = stats_main["Statut"].value_counts().get("🟠", 0)
 count_rouge = stats_main["Statut"].value_counts().get("🔴", 0)
 
 st.markdown(f"""
-df_simple["Capteur"] = df_simple["Capteur"].astype(str).str.strip()
-df_simple["Doublon"] = df_simple["Capteur"].duplicated(keep=False).map({True: "🔁 Oui", False: "✅ Non"})
-    df_simple["Dans la référence"] = df_simple["Capteur"].apply(
-    capteurs_trouves = set(df_simple["Capteur"])
 **Résumé des capteurs :**
 - ✔️ Capteurs exploitables (🟢) : `{count_vert}`
 - ⚠️ Capteurs incomplets (🟠) : `{count_orange}`
@@ -239,3 +256,4 @@ st.pyplot(fig)
 st.subheader("📤 Export des résultats")
 csv = df_simple.to_csv(index=False).encode('utf-8')
 st.download_button("📥 Télécharger le rapport (CSV)", csv, file_name="rapport_capteurs.csv", mime="text/csv")
+
