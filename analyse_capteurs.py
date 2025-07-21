@@ -63,10 +63,41 @@ def analyse_simplifiee(df, capteurs_reference=None):
 
     df_resume = pd.DataFrame(resume)
 
-    # 📊 Affichage du tableau
-    st.dataframe(df_resume, use_container_width=True)
+    # 🔁 Ajouter la colonne Doublon
+    df_resume["Doublon"] = df_resume["Capteur"].duplicated(keep=False).map({True: "🔁 Oui", False: "✅ Non"})
 
-    # 📉 Graphique horizontal trié
+    # 🔍 Validation si référence disponible
+    if capteurs_reference is not None and len(capteurs_reference) > 0:
+        df_resume["Capteur"] = df_resume["Capteur"].astype(str).str.strip()
+        capteurs_reference_cleaned = {c.strip() for c in capteurs_reference}
+
+        df_resume["Dans la référence"] = df_resume["Capteur"].apply(
+            lambda capteur: "✅ Oui" if capteur in capteurs_reference_cleaned else "❌ Non"
+        )
+
+        st.subheader("📋 Validation des capteurs analysés")
+        st.markdown("""
+        ### 🧾 Légende des colonnes :
+        - ✅ : Présence / Unicité confirmée  
+        - ❌ : Capteur non trouvé dans la référence  
+        - 🔁 : Capteur dupliqué
+        """)
+        st.dataframe(df_resume[["Capteur", "Dans la référence", "Doublon"]], use_container_width=True)
+
+        capteurs_trouves = set(df_resume["Capteur"])
+        manquants = sorted(capteurs_reference_cleaned - capteurs_trouves)
+        if manquants:
+            st.subheader("📌 Capteurs attendus non trouvés dans les données analysées")
+            st.markdown("Voici les capteurs présents dans le fichier de référence mais absents du fichier principal :")
+            st.write(manquants)
+        else:
+            st.markdown("✅ Tous les capteurs attendus sont présents dans les données.")
+    else:
+        st.subheader("📋 Validation des capteurs analysés")
+        st.markdown("⚠️ Aucune référence fournie. Affichage des doublons uniquement.")
+        st.dataframe(df_resume[["Capteur", "Doublon"]], use_container_width=True)
+
+    # 📊 Graphique horizontal
     df_plot = df_resume.sort_values(by="% Présentes", ascending=True)
     fig, ax = plt.subplots(figsize=(10, max(6, len(df_plot) * 0.25)))
     sns.barplot(
@@ -85,9 +116,16 @@ def analyse_simplifiee(df, capteurs_reference=None):
     plt.tight_layout()
     st.pyplot(fig)
 
-    return df_resume  # ✅ Ce return doit être ici à l'intérieur de la fonction
+    # 🧾 Légende des statuts
+    st.markdown("""
+    ### 🧾 Légende des statuts :
+    - 🟢 : Capteur exploitable (≥ 80 %)
+    - 🟠 : Incomplet (entre 1 % et 79 %)
+    - 🔴 : Données absentes (0 %)
+    """)
 
- 
+    return df_resume  # ✅ Bien indenté dans la fonction
+
 
   # 🔁 Vérification des doublons
 df_resume["Capteur"] = df_resume["Capteur"].astype(str).str.strip()
