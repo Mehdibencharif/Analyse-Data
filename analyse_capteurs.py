@@ -109,6 +109,9 @@ def analyse_simplifiee(df, capteurs_reference=None):
 
     return df_resume  # ✅ doit être à l’intérieur de la fonction, bien indenté
 
+# 📊 Analyse simple avec validation (table + graphique)
+df_simple = analyse_simplifiee(df_main, capteurs_reference)
+
 # 🔁 Nettoyage et vérification des doublons
 df_simple["Capteur"] = df_simple["Capteur"].astype(str).str.strip()
 df_simple["Doublon"] = df_simple["Capteur"].duplicated(keep=False).map({True: "🔁 Oui", False: "✅ Non"})
