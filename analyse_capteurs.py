@@ -154,26 +154,27 @@ else:
 df_simple = analyse_simplifiee(df_main, capteurs_reference)
 
 # --- Analyse rééchantillonnée selon la fréquence choisie ---
-st.subheader("📈 Analyse rééchantillonnée selon la fréquence choisie")
-stats_main = analyser_completude(df_main.reset_index())
-st.dataframe(stats_main, use_container_width=True)
+# --- Graphique horizontal de complétude par capteur ---
+fig, ax = plt.subplots(figsize=(10, max(6, len(stats_main) * 0.25)))  # Hauteur dynamique
 
-# --- Graphique de complétude par capteur ---
-fig1, ax1 = plt.subplots(figsize=(12, 5))
+df_plot = stats_main.sort_values(by="% Présentes", ascending=True)  # Tri du moins au plus complet
+
 sns.barplot(
-    data=stats_main,
-    x="Capteur",
-    y="% Présentes",  # ✅ correspond bien à la colonne du nouveau DataFrame
+    data=df_plot,
+    y="Capteur",               # ✅ Capteurs sur l'axe vertical
+    x="% Présentes",           # ✅ Pourcentage sur l'axe horizontal
     hue="Statut",
     dodge=False,
     palette={"🟢": "green", "🟠": "orange", "🔴": "red"},
-    ax=ax1
+    ax=ax
 )
-plt.title("Complétude des capteurs - Fichier principal")
-plt.xticks(rotation=45, ha='right')
-plt.ylim(0, 100)
+
+plt.title("Complétude des capteurs - Fichier principal", fontsize=14)
+plt.xlabel("% Données présentes")
+plt.ylabel("Capteur")
+plt.xlim(0, 100)
 plt.tight_layout()
-st.pyplot(fig1)
+st.pyplot(fig)
 
 
 # ✅ Export final
