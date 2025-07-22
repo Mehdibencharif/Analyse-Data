@@ -148,38 +148,11 @@ if capteurs_reference is not None and len(capteurs_reference) > 0:
     df_simple["Dans la référence"] = df_simple["Nom_nettoye"].apply(
         lambda nom: "✅ Oui" if nom in capteurs_reference_cleaned else "❌ Non"
     )
-
-    # 🔽 Tri : capteurs validés (✅) d’abord, puis ❌
+    
+  # 🔽 Tri : capteurs validés (✅) d’abord, puis ❌
     df_simple = df_simple.sort_values(by="Dans la référence", ascending=False).reset_index(drop=True)
 
-    st.subheader("📋 Validation des capteurs analysés")
-    st.markdown("""
-    ### 🧾 Légende des colonnes :
-    - ✅ : Présence confirmée dans la référence  
-    - ❌ : Absent de la référence  
-    - 🔁 : Capteur dupliqué dans le fichier principal
-    """)
-    st.dataframe(df_simple[["Capteur", "Dans la référence", "Doublon"]], use_container_width=True)
-
-    # 🔍 Capteurs non trouvés dans la référence (issus du fichier principal)
-    df_non_trouves = df_simple[df_simple["Dans la référence"] == "❌ Non"]
-    if not df_non_trouves.empty:
-        st.subheader("📌 Capteurs du fichier principal non présents dans la référence")
-        st.markdown("Ceux-ci ne figurent pas dans le fichier de comparaison :")
-        st.dataframe(df_non_trouves[["Capteur"]], use_container_width=True)
-
-    # 🔎 Capteurs attendus mais absents du fichier principal
-    capteurs_trouves = set(df_simple["Nom_nettoye"])
-    manquants = sorted(capteurs_reference_cleaned - capteurs_trouves)
-    if manquants:
-        st.subheader("📌 Capteurs attendus non trouvés dans les données analysées")
-        st.markdown("Voici les capteurs présents dans le fichier de référence mais absents du fichier principal :")
-        st.write(manquants)
-    else:
-        st.markdown("✅ Tous les capteurs attendus sont présents dans les données.")
-        
-else:
-   # 📋 Affichage séparé des capteurs validés et non validés
+    # ✅ Affichage séparé des capteurs
     st.subheader("📋 ✅ Capteurs trouvés dans la référence")
     df_valides = df_simple[df_simple["Dans la référence"] == "✅ Oui"]
     if not df_valides.empty:
@@ -193,6 +166,22 @@ else:
         st.dataframe(df_non_valides[["Capteur", "Dans la référence", "Doublon"]], use_container_width=True)
     else:
         st.markdown("Tous les capteurs sont présents dans la référence.")
+
+    # 🔍 Liste brute des noms de capteurs absents dans la référence
+    if not df_non_valides.empty:
+        st.subheader("📌 Liste brute – Capteurs du fichier principal absents de la référence")
+        st.write(df_non_valides["Capteur"].tolist())
+
+    # 🔎 Capteurs attendus mais absents du fichier principal
+    capteurs_trouves = set(df_simple["Nom_nettoye"])
+    manquants = sorted(capteurs_reference_cleaned - capteurs_trouves)
+    if manquants:
+        st.subheader("📌 Capteurs attendus non trouvés dans les données analysées")
+        st.markdown("Voici les capteurs présents dans le fichier de référence mais absents du fichier principal :")
+        st.write(manquants)
+    else:
+        st.markdown("✅ Tous les capteurs attendus sont présents dans les données.")
+
 
 
 # --- Analyse de complétude sans rééchantillonnage ---
