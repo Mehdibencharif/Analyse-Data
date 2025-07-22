@@ -153,14 +153,14 @@ if capteurs_reference is not None and len(capteurs_reference) > 0:
     df_simple = df_simple.sort_values(by="Dans la référence", ascending=False).reset_index(drop=True)
 
     # ✅ Affichage séparé des capteurs
-    st.subheader("📋 ✅ Capteurs trouvés dans la référence")
+    st.subheader(" ✅ Capteurs trouvés dans la référence")
     df_valides = df_simple[df_simple["Dans la référence"] == "✅ Oui"]
     if not df_valides.empty:
         st.dataframe(df_valides[["Capteur", "Dans la référence", "Doublon"]], use_container_width=True)
     else:
         st.markdown("Aucun capteur valide trouvé.")
 
-    st.subheader("📋 ❌ Capteurs absents de la référence")
+    st.subheader(" ❌ Capteurs absents de la référence")
     df_non_valides = df_simple[df_simple["Dans la référence"] == "❌ Non"]
     if not df_non_valides.empty:
         st.dataframe(df_non_valides[["Capteur", "Dans la référence", "Doublon"]], use_container_width=True)
@@ -176,7 +176,7 @@ if capteurs_reference is not None and len(capteurs_reference) > 0:
     capteurs_trouves = set(df_simple["Nom_nettoye"])
     manquants = sorted(capteurs_reference_cleaned - capteurs_trouves)
     if manquants:
-        st.subheader(" 📋 Capteurs attendus non trouvés dans les données analysées")
+        st.subheader("  Capteurs attendus non trouvés dans les données analysées")
         st.markdown("Voici les capteurs présents dans le fichier de référence mais absents du fichier principal :")
 
         # Création d’un DataFrame lisible
