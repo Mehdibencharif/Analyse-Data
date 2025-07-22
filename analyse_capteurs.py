@@ -304,7 +304,7 @@ with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         'format':   format_rouge
     })
 
-    writer.save()
+    #writer.save()
 
 # Bouton de téléchargement
 st.download_button(
