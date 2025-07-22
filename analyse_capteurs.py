@@ -175,13 +175,15 @@ if capteurs_reference is not None and len(capteurs_reference) > 0:
     # 🔎 Capteurs attendus mais absents du fichier principal
     capteurs_trouves = set(df_simple["Nom_nettoye"])
     manquants = sorted(capteurs_reference_cleaned - capteurs_trouves)
-    if manquants:
-        st.subheader("📌 Capteurs attendus non trouvés dans les données analysées")
-        st.markdown("Voici les capteurs présents dans le fichier de référence mais absents du fichier principal :")
-        st.write(manquants)
-    else:
-        st.markdown("✅ Tous les capteurs attendus sont présents dans les données.")
+ if manquants:
+    st.subheader("📌 📋 Capteurs attendus non trouvés dans les données analysées")
+    st.markdown("Voici les capteurs présents dans le fichier de référence mais absents du fichier principal :")
 
+    # Création d’un tableau lisible
+    df_manquants = pd.DataFrame(sorted(manquants), columns=["Capteur (référence manquant dans les données)"])
+    st.dataframe(df_manquants, use_container_width=True)
+else:
+    st.markdown("✅ Tous les capteurs attendus sont présents dans les données.")
 
 
 # --- Analyse de complétude sans rééchantillonnage ---
