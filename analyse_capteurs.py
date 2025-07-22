@@ -7,7 +7,7 @@ from datetime import timedelta
 
 # ------------- Configuration de la page Streamlit -------------
 st.set_page_config(page_title="Analyse de données capteurs", layout="wide")
-st.title("📊 Analyse de données capteurs")
+st.title("📊 Analyse de données ")
 
 # ------------- Paramètres de fréquence d'analyse -------------
 st.sidebar.header("Paramètres d'analyse")
@@ -169,14 +169,14 @@ if capteurs_reference is not None and len(capteurs_reference) > 0:
 
     # 🔍 Liste brute des noms de capteurs absents dans la référence
     if not df_non_valides.empty:
-        st.subheader("📌 Liste brute – Capteurs du fichier principal absents de la référence")
+        st.subheader(" Liste brute – Capteurs du fichier principal absents de la référence")
         st.write(df_non_valides["Capteur"].tolist())
 
      # 🔎 Capteurs attendus mais absents du fichier principal
     capteurs_trouves = set(df_simple["Nom_nettoye"])
     manquants = sorted(capteurs_reference_cleaned - capteurs_trouves)
     if manquants:
-        st.subheader("📌 📋 Capteurs attendus non trouvés dans les données analysées")
+        st.subheader(" 📋 Capteurs attendus non trouvés dans les données analysées")
         st.markdown("Voici les capteurs présents dans le fichier de référence mais absents du fichier principal :")
 
         # Création d’un DataFrame lisible
@@ -231,9 +231,9 @@ count_orange = stats_main["Statut"].value_counts().get("🟠", 0)
 count_rouge = stats_main["Statut"].value_counts().get("🔴", 0)
 st.markdown(f"""
 **Résumé des capteurs :**
-- ✔️ Capteurs exploitables (🟢) : `{count_vert}`
-- ⚠️ Capteurs incomplets (🟠) : `{count_orange}`
-- ❌ Capteurs vides (🔴) : `{count_rouge}`
+-  Capteurs exploitables (🟢) : `{count_vert}`
+-  Capteurs incomplets (🟠) : `{count_orange}`
+-  Capteurs vides (🔴) : `{count_rouge}`
 """)
 
 # 📉 Graphique horizontal final
@@ -275,7 +275,7 @@ with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
 
     workbook  = writer.book
 
-    # 📌 Format couleur selon le statut
+    #  Format couleur selon le statut
     format_vert = workbook.add_format({'bg_color': '#C6EFCE', 'font_color': '#006100'})
     format_orange = workbook.add_format({'bg_color': '#FFEB9C', 'font_color': '#9C5700'})
     format_rouge = workbook.add_format({'bg_color': '#FFC7CE', 'font_color': '#9C0006'})
