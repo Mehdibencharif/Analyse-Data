@@ -132,9 +132,21 @@ df_simple["Doublon"] = df_simple["Capteur"].duplicated(keep=False).map({True: "�
 
 # 🔍 Validation selon la référence (si fournie)
 if capteurs_reference is not None and len(capteurs_reference) > 0:
-    capteurs_reference_cleaned = {c.strip() for c in capteurs_reference}
-    df_simple["Dans la référence"] = df_simple["Capteur"].apply(
-        lambda capteur: "✅ Oui" if capteur in capteurs_reference_cleaned else "❌ Non"
+    import re
+
+    def nettoyer_nom_capteur(nom):
+        # Supprime les unités entre crochets comme [°C], [dB], [kW], etc.
+        return re.sub(r"\s*\[[^\]]*\]", "", nom).strip()
+
+    # Nettoyage des noms dans la référence
+    capteurs_reference_cleaned = {nettoyer_nom_capteur(c) for c in capteurs_reference}
+
+    # Création d’une colonne "Nom_nettoye" dans le fichier analysé
+    df_simple["Nom_nettoye"] = df_simple["Capteur"].apply(nettoyer_nom_capteur)
+
+    # Comparaison avec les noms nettoyés
+    df_simple["Dans la référence"] = df_simple["Nom_nettoye"].apply(
+        lambda nom: "✅ Oui" if nom in capteurs_reference_cleaned else "❌ Non"
     )
 
     st.subheader("📋 Validation des capteurs analysés")
@@ -146,7 +158,8 @@ if capteurs_reference is not None and len(capteurs_reference) > 0:
     """)
     st.dataframe(df_simple[["Capteur", "Dans la référence", "Doublon"]], use_container_width=True)
 
-    capteurs_trouves = set(df_simple["Capteur"])
+    # Capteurs attendus mais non trouvés
+    capteurs_trouves = set(df_simple["Nom_nettoye"])
     manquants = sorted(capteurs_reference_cleaned - capteurs_trouves)
     if manquants:
         st.subheader("📌 Capteurs attendus non trouvés dans les données analysées")
@@ -154,6 +167,7 @@ if capteurs_reference is not None and len(capteurs_reference) > 0:
         st.write(manquants)
     else:
         st.markdown("✅ Tous les capteurs attendus sont présents dans les données.")
+
 else:
     st.subheader("📋 Validation des capteurs analysés")
     st.markdown("⚠️ Aucune référence fournie. Affichage des doublons uniquement.")
