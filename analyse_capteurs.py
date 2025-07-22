@@ -308,7 +308,7 @@ with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
 
 # Bouton de téléchargement
 st.download_button(
-    label="📥 Télécharger le rapport (Excel coloré)",
+    label="📥 Télécharger le rapport Excel ",
     data=output.getvalue(),
     file_name="rapport_capteurs.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
