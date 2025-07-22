@@ -255,7 +255,61 @@ plt.xlim(0, 100)
 plt.tight_layout()
 st.pyplot(fig)
 
-# ✅ Export final
-st.subheader("📤 Export des résultats")
-csv = df_simple.to_csv(index=False).encode('utf-8')
-st.download_button("📥 Télécharger le rapport (CSV)", csv, file_name="rapport_capteurs.csv", mime="text/csv")
+# ✅ Export Excel final avec couleurs
+st.subheader("📤 Export des résultats (Excel)")
+
+from io import BytesIO
+
+output = BytesIO()
+
+with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+    # Écriture des feuilles
+    df_simple.to_excel(writer, index=False, sheet_name="Résumé capteurs")
+    stats_main.to_excel(writer, index=False, sheet_name="Complétude brute")
+
+    if 'df_non_valides' in locals() and not df_non_valides.empty:
+        df_non_valides.to_excel(writer, index=False, sheet_name="Capteurs non reconnus")
+
+    if 'df_manquants' in locals() and not df_manquants.empty:
+        df_manquants.to_excel(writer, index=False, sheet_name="Capteurs manquants")
+
+    workbook  = writer.book
+
+    # 📌 Format couleur selon le statut
+    format_vert = workbook.add_format({'bg_color': '#C6EFCE', 'font_color': '#006100'})
+    format_orange = workbook.add_format({'bg_color': '#FFEB9C', 'font_color': '#9C5700'})
+    format_rouge = workbook.add_format({'bg_color': '#FFC7CE', 'font_color': '#9C0006'})
+
+    # Appliquer le format à la feuille "Résumé capteurs"
+    feuille = writer.sheets["Résumé capteurs"]
+    statut_col = df_simple.columns.get_loc("Statut")  # colonne Statut
+
+    # Appliquer la mise en forme conditionnelle à la colonne Statut
+    feuille.conditional_format(1, statut_col, len(df_simple), statut_col, {
+        'type':     'text',
+        'criteria': 'containing',
+        'value':    '🟢',
+        'format':   format_vert
+    })
+    feuille.conditional_format(1, statut_col, len(df_simple), statut_col, {
+        'type':     'text',
+        'criteria': 'containing',
+        'value':    '🟠',
+        'format':   format_orange
+    })
+    feuille.conditional_format(1, statut_col, len(df_simple), statut_col, {
+        'type':     'text',
+        'criteria': 'containing',
+        'value':    '🔴',
+        'format':   format_rouge
+    })
+
+    writer.save()
+
+# Bouton de téléchargement
+st.download_button(
+    label="📥 Télécharger le rapport (Excel coloré)",
+    data=output.getvalue(),
+    file_name="rapport_capteurs.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+)
