@@ -179,9 +179,20 @@ if capteurs_reference is not None and len(capteurs_reference) > 0:
         st.markdown("✅ Tous les capteurs attendus sont présents dans les données.")
         
 else:
-    st.subheader("📋 Validation des capteurs analysés")
-    st.markdown("⚠️ Aucune référence fournie. Affichage des doublons uniquement.")
-    st.dataframe(df_simple[["Capteur", "Doublon"]], use_container_width=True)
+   # 📋 Affichage séparé des capteurs validés et non validés
+    st.subheader("📋 ✅ Capteurs trouvés dans la référence")
+    df_valides = df_simple[df_simple["Dans la référence"] == "✅ Oui"]
+    if not df_valides.empty:
+        st.dataframe(df_valides[["Capteur", "Dans la référence", "Doublon"]], use_container_width=True)
+    else:
+        st.markdown("Aucun capteur valide trouvé.")
+
+    st.subheader("📋 ❌ Capteurs absents de la référence")
+    df_non_valides = df_simple[df_simple["Dans la référence"] == "❌ Non"]
+    if not df_non_valides.empty:
+        st.dataframe(df_non_valides[["Capteur", "Dans la référence", "Doublon"]], use_container_width=True)
+    else:
+        st.markdown("Tous les capteurs sont présents dans la référence.")
 
 
 # --- Analyse de complétude sans rééchantillonnage ---
