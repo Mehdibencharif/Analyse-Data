@@ -25,11 +25,13 @@ rule_map = {
 
 # ------------- Téléversement des fichiers -------------
 st.sidebar.subheader("Téléversement des fichiers")
-main_file = st.sidebar.file_uploader(
-    "📂 Fichier principal (obligatoire)",
+uploaded_files = st.sidebar.file_uploader(
+    "📂 Fichiers principaux (vous pouvez en téléverser plusieurs)",
     type=[".xlsx", ".xls", ".xlsm"],
+    accept_multiple_files=True,
     key="main"
 )
+
 compare_file = st.sidebar.file_uploader(
     "📂 Fichier de comparaison (facultatif)",
     type=[".xlsx", ".xls", ".xlsm"],
@@ -52,8 +54,8 @@ def charger_et_resampler(fichier, nom_fichier):
     return df
 
 # ------------- Vérification de la présence du fichier principal -------------
-if not main_file:
-    st.warning("⚠️ Veuillez téléverser un fichier principal pour démarrer l’analyse.")
+if not uploaded_files:
+    st.warning("⚠️ Veuillez téléverser au moins un fichier principal.")
     st.stop()
 
 # 📥 Chargement du fichier principal
