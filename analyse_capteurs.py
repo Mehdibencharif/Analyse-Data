@@ -344,7 +344,8 @@ if "Statut" in df_simple.columns:
 
     # === Ajouter à l'Excel ===
     df_simple.to_excel(writer_global, index=False, sheet_name=f"Résumé - {nom_base}")
-    stats_main.to_excel(writer_global, index=False, sheet_name=f"Complétude - {nom_base}")
+    nom_feuille_completude = f"Complétude - {nom_base}"[:31]
+    stats_main.to_excel(writer_global, index=False, sheet_name=nom_feuille_completude)
     if df_non_valides is not None and not df_non_valides.empty:
         df_non_valides.to_excel(writer_global, index=False, sheet_name=f"Non reconnus - {nom_base}")
     if df_manquants is not None and not df_manquants.empty:
