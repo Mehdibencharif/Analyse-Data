@@ -58,9 +58,6 @@ if not uploaded_files:
     st.warning("⚠️ Veuillez téléverser au moins un fichier principal.")
     st.stop()
 
-# 📥 Chargement du fichier principal
-df_main = charger_et_resampler(main_file, "Fichier principal")
-
 # 📑 Lecture du fichier de comparaison (capteurs attendus)
 capteurs_reference = None
 if compare_file:
@@ -73,6 +70,13 @@ if compare_file:
         st.stop()
 else:
     st.warning("⚠️ Aucun fichier de comparaison n'a été téléversé.")
+
+# 📥 Analyse de chaque fichier principal téléversé
+for i, main_file in enumerate(uploaded_files):
+    st.markdown(f"## 📁 Fichier {i+1} : `{main_file.name}`")
+    
+    df_main = charger_et_resampler(main_file, f"Fichier principal {i+1}")
+    
 
 # --- Analyse simple ---
 def analyse_simplifiee(df, capteurs_reference=None):
@@ -137,51 +141,43 @@ if capteurs_reference is not None and len(capteurs_reference) > 0:
     import re
 
     def nettoyer_nom_capteur(nom):
-        # Supprime les unités entre crochets comme [°C], [dB], [kW], etc.
         return re.sub(r"\s*\[[^\]]*\]", "", nom).strip()
 
-    # Nettoyage des noms dans la référence
     capteurs_reference_cleaned = {nettoyer_nom_capteur(c) for c in capteurs_reference}
-
-    # Création d’une colonne "Nom_nettoye" dans le fichier analysé
     df_simple["Nom_nettoye"] = df_simple["Capteur"].apply(nettoyer_nom_capteur)
-
-    # Comparaison avec les noms nettoyés
     df_simple["Dans la référence"] = df_simple["Nom_nettoye"].apply(
         lambda nom: "✅ Oui" if nom in capteurs_reference_cleaned else "❌ Non"
     )
-    
-  # 🔽 Tri : capteurs validés (✅) d’abord, puis ❌
+
     df_simple = df_simple.sort_values(by="Dans la référence", ascending=False).reset_index(drop=True)
 
-    # ✅ Affichage séparé des capteurs
-    st.subheader(" ✅ Capteurs trouvés dans la référence")
+    # ✅ Capteurs présents
+    st.subheader("✅ Capteurs trouvés dans la référence")
     df_valides = df_simple[df_simple["Dans la référence"] == "✅ Oui"]
     if not df_valides.empty:
         st.dataframe(df_valides[["Capteur", "Dans la référence", "Doublon"]], use_container_width=True)
     else:
         st.markdown("Aucun capteur valide trouvé.")
 
-    st.subheader(" ❌ Capteurs absents de la référence")
+    # ❌ Capteurs absents
+    st.subheader("❌ Capteurs absents de la référence")
     df_non_valides = df_simple[df_simple["Dans la référence"] == "❌ Non"]
     if not df_non_valides.empty:
         st.dataframe(df_non_valides[["Capteur", "Dans la référence", "Doublon"]], use_container_width=True)
     else:
         st.markdown("Tous les capteurs sont présents dans la référence.")
 
-    # 🔍 Liste brute des noms de capteurs absents dans la référence
+    # Liste brute
     if not df_non_valides.empty:
-        st.subheader(" Liste brute – Capteurs du fichier principal absents de la référence")
+        st.subheader("📋 Liste brute – Capteurs absents de la référence")
         st.write(df_non_valides["Capteur"].tolist())
 
-     # 🔎 Capteurs attendus mais absents du fichier principal
+    # 🔎 Capteurs attendus mais manquants dans le fichier
     capteurs_trouves = set(df_simple["Nom_nettoye"])
     manquants = sorted(capteurs_reference_cleaned - capteurs_trouves)
     if manquants:
-        st.subheader("  Capteurs attendus non trouvés dans les données analysées")
-        st.markdown("Voici les capteurs présents dans le fichier de référence mais absents du fichier principal :")
-
-        # Création d’un DataFrame lisible
+        st.subheader("📌 Capteurs attendus non trouvés")
+        st.markdown("Capteurs attendus dans la référence mais absents du fichier :")
         df_manquants = pd.DataFrame(manquants, columns=["Capteur (référence manquant dans les données)"])
         st.dataframe(df_manquants, use_container_width=True)
     else:
@@ -215,7 +211,7 @@ def analyser_completude(df):
     return pd.DataFrame(resultat)
 
 # 📈 Analyse de complétude sans rééchantillonnage
-st.subheader("📈 Analyse de complétude des données brutes")
+st.subheader(f"📈 Complétude – Données brutes (Fichier {i+1})")
 stats_main = analyser_completude(df_main)
 st.dataframe(stats_main, use_container_width=True)
 
@@ -232,13 +228,13 @@ count_vert = stats_main["Statut"].value_counts().get("🟢", 0)
 count_orange = stats_main["Statut"].value_counts().get("🟠", 0)
 count_rouge = stats_main["Statut"].value_counts().get("🔴", 0)
 st.markdown(f"""
-**Résumé des capteurs :**
--  Capteurs exploitables (🟢) : `{count_vert}`
--  Capteurs incomplets (🟠) : `{count_orange}`
--  Capteurs vides (🔴) : `{count_rouge}`
+**Résumé des capteurs pour `{main_file.name}` :**
+- 🟢 Capteurs exploitables : `{count_vert}`
+- 🟠 Capteurs incomplets : `{count_orange}`
+- 🔴 Capteurs vides : `{count_rouge}`
 """)
 
-# 📉 Graphique horizontal final
+# 📉 Graphique horizontal par capteur
 df_plot = stats_main.sort_values(by="% Présentes", ascending=True)
 fig, ax = plt.subplots(figsize=(10, max(6, len(df_plot) * 0.25)))
 sns.barplot(
@@ -250,68 +246,102 @@ sns.barplot(
     palette={"🟢": "green", "🟠": "orange", "🔴": "red"},
     ax=ax
 )
-plt.title("Complétude des capteurs - Fichier brut", fontsize=14)
+plt.title(f"Complétude des capteurs – `{main_file.name}`", fontsize=14)
 plt.xlabel("% Données présentes")
 plt.ylabel("Capteur")
 plt.xlim(0, 100)
 plt.tight_layout()
 st.pyplot(fig)
 
-# ✅ Export Excel final avec couleurs
-st.subheader("📤 Export des résultats (Excel)")
 
+# ✅ Export Excel final avec couleurs
 from io import BytesIO
 
-output = BytesIO()
+# === Initialisation ===
+export_global = BytesIO()
+writer_global = pd.ExcelWriter(export_global, engine='xlsxwriter')
+table_globale = []
 
-with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-    # Écriture des feuilles
-    df_simple.to_excel(writer, index=False, sheet_name="Résumé capteurs")
-    stats_main.to_excel(writer, index=False, sheet_name="Complétude brute")
+# === Boucle sur les fichiers téléversés ===
+for i, main_file in enumerate(uploaded_files):
+    st.markdown(f"## 📁 Fichier {i+1} : `{main_file.name}`")
+    df_main = charger_et_resampler(main_file, f"Fichier principal {i+1}")
+    df_simple = analyse_simplifiee(df_main, capteurs_reference)
+    stats_main = analyser_completude(df_main)
 
-    if 'df_non_valides' in locals() and not df_non_valides.empty:
-        df_non_valides.to_excel(writer, index=False, sheet_name="Capteurs non reconnus")
+    # Nettoyage doublons
+    df_simple["Capteur"] = df_simple["Capteur"].astype(str).str.strip()
+    df_simple["Doublon"] = df_simple["Capteur"].duplicated(keep=False).map({True: "🔁 Oui", False: "✅ Non"})
 
-    if 'df_manquants' in locals() and not df_manquants.empty:
-        df_manquants.to_excel(writer, index=False, sheet_name="Capteurs manquants")
+    # Validation si référence présente
+    df_non_valides, df_manquants = None, None
+    if capteurs_reference:
+        import re
 
-    workbook  = writer.book
+        def nettoyer_nom_capteur(nom):
+            return re.sub(r"\s*\[[^\]]*\]", "", nom).strip()
 
-    #  Format couleur selon le statut
+        capteurs_reference_cleaned = {nettoyer_nom_capteur(c) for c in capteurs_reference}
+        df_simple["Nom_nettoye"] = df_simple["Capteur"].apply(nettoyer_nom_capteur)
+        df_simple["Dans la référence"] = df_simple["Nom_nettoye"].apply(
+            lambda nom: "✅ Oui" if nom in capteurs_reference_cleaned else "❌ Non"
+        )
+        df_simple = df_simple.sort_values(by="Dans la référence", ascending=False).reset_index(drop=True)
+        df_non_valides = df_simple[df_simple["Dans la référence"] == "❌ Non"]
+        capteurs_trouves = set(df_simple["Nom_nettoye"])
+        manquants = sorted(capteurs_reference_cleaned - capteurs_trouves)
+        df_manquants = pd.DataFrame(manquants, columns=["Capteur (référence manquant dans les données)"]) if manquants else None
+
+    # Nom raccourci
+    nom_base = main_file.name.replace(".xlsx", "").replace(".xlsm", "").replace(".xls", "")[:20]
+
+    # === Ajouter à l'Excel ===
+    df_simple.to_excel(writer_global, index=False, sheet_name=f"Résumé - {nom_base}")
+    stats_main.to_excel(writer_global, index=False, sheet_name=f"Complétude - {nom_base}")
+    if df_non_valides is not None and not df_non_valides.empty:
+        df_non_valides.to_excel(writer_global, index=False, sheet_name=f"Non reconnus - {nom_base}")
+    if df_manquants is not None and not df_manquants.empty:
+        df_manquants.to_excel(writer_global, index=False, sheet_name=f"Manquants - {nom_base}")
+
+    # === Mise en forme conditionnelle ===
+    workbook = writer_global.book
+    feuille = writer_global.sheets[f"Résumé - {nom_base}"]
     format_vert = workbook.add_format({'bg_color': '#C6EFCE', 'font_color': '#006100'})
     format_orange = workbook.add_format({'bg_color': '#FFEB9C', 'font_color': '#9C5700'})
     format_rouge = workbook.add_format({'bg_color': '#FFC7CE', 'font_color': '#9C0006'})
 
-    # Appliquer le format à la feuille "Résumé capteurs"
-    feuille = writer.sheets["Résumé capteurs"]
-    statut_col = df_simple.columns.get_loc("Statut")  # colonne Statut
+    if "Statut" in df_simple.columns:
+        statut_col = df_simple.columns.get_loc("Statut")
+        feuille.conditional_format(1, statut_col, len(df_simple), statut_col, {
+            'type': 'text', 'criteria': 'containing', 'value': '🟢', 'format': format_vert
+        })
+        feuille.conditional_format(1, statut_col, len(df_simple), statut_col, {
+            'type': 'text', 'criteria': 'containing', 'value': '🟠', 'format': format_orange
+        })
+        feuille.conditional_format(1, statut_col, len(df_simple), statut_col, {
+            'type': 'text', 'criteria': 'containing', 'value': '🔴', 'format': format_rouge
+        })
 
-    # Appliquer la mise en forme conditionnelle à la colonne Statut
-    feuille.conditional_format(1, statut_col, len(df_simple), statut_col, {
-        'type':     'text',
-        'criteria': 'containing',
-        'value':    '🟢',
-        'format':   format_vert
-    })
-    feuille.conditional_format(1, statut_col, len(df_simple), statut_col, {
-        'type':     'text',
-        'criteria': 'containing',
-        'value':    '🟠',
-        'format':   format_orange
-    })
-    feuille.conditional_format(1, statut_col, len(df_simple), statut_col, {
-        'type':     'text',
-        'criteria': 'containing',
-        'value':    '🔴',
-        'format':   format_rouge
-    })
+    # === Ajouter à la synthèse globale ===
+    for _, row in df_simple.iterrows():
+        table_globale.append({
+            "Fichier": main_file.name,
+            "Capteur": row["Capteur"],
+            "% Présentes": row["% Présentes"],
+            "Statut": row["Statut"]
+        })
 
-    #writer.save()
+# === Ajouter la synthèse globale ===
+df_global = pd.DataFrame(table_globale)
+df_global.to_excel(writer_global, index=False, sheet_name="Synthèse globale")
 
-# Bouton de téléchargement
+# === Finaliser et télécharger ===
+writer_global.close()
+
+st.subheader("📤 Export global de tous les fichiers")
 st.download_button(
-    label="📥 Télécharger le rapport Excel ",
-    data=output.getvalue(),
-    file_name="rapport_capteurs.xlsx",
+    label="📥 Télécharger le rapport global Excel",
+    data=export_global.getvalue(),
+    file_name="rapport_global_capteurs.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
