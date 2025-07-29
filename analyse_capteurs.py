@@ -262,12 +262,59 @@ export_global = BytesIO()
 writer_global = pd.ExcelWriter(export_global, engine='xlsxwriter')
 table_globale = []
 
+from io import BytesIO
+from pathlib import Path
+import re
+
+# Initialisation du buffer d’export Excel
+export_global = BytesIO()
+writer_global = pd.ExcelWriter(export_global, engine='xlsxwriter')
+
+# Fonction pour créer un nom de feuille Excel valide (<= 31 caractères)
+def nom_feuille_limite(prefix, base):
+    return f"{prefix} - {base}"[:31]
+
 # === Boucle sur les fichiers téléversés ===
 for i, main_file in enumerate(uploaded_files):
     st.markdown(f"## 📁 Fichier {i+1} : `{main_file.name}`")
     df_main = charger_et_resampler(main_file, f"Fichier principal {i+1}")
     df_simple = analyse_simplifiee(df_main, capteurs_reference)
     stats_main = analyser_completude(df_main)
+
+    # Nettoyage du nom du fichier pour l'utiliser comme base de nom de feuille
+nom_fichier_brut = Path(main_file.name).stem
+nom_base = re.sub(r'[\\/*?:[\]]', '_', nom_fichier_brut)[:20]
+
+# Export vers le fichier global
+df_simple.to_excel(writer_global, index=False, sheet_name=nom_feuille_limite("Résumé", nom_base))
+stats_main.to_excel(writer_global, index=False, sheet_name=nom_feuille_limite("Complétude", nom_base))
+
+if 'df_non_valides' in locals() and not df_non_valides.empty:
+    df_non_valides.to_excel(writer_global, index=False, sheet_name=nom_feuille_limite("Non reconnus", nom_base))
+
+if 'df_manquants' in locals() and not df_manquants.empty:
+    df_manquants.to_excel(writer_global, index=False, sheet_name=nom_feuille_limite("Manquants", nom_base))
+
+# Mise en forme conditionnelle (feuille Résumé uniquement)
+workbook = writer_global.book
+format_vert = workbook.add_format({'bg_color': '#C6EFCE', 'font_color': '#006100'})
+format_orange = workbook.add_format({'bg_color': '#FFEB9C', 'font_color': '#9C5700'})
+format_rouge = workbook.add_format({'bg_color': '#FFC7CE', 'font_color': '#9C0006'})
+
+nom_feuille_resume = nom_feuille_limite("Résumé", nom_base)
+feuille = writer_global.sheets[nom_feuille_resume]
+
+if "Statut" in df_simple.columns:
+    statut_col = df_simple.columns.get_loc("Statut")
+    feuille.conditional_format(1, statut_col, len(df_simple), statut_col, {
+        'type': 'text', 'criteria': 'containing', 'value': '🟢', 'format': format_vert
+    })
+    feuille.conditional_format(1, statut_col, len(df_simple), statut_col, {
+        'type': 'text', 'criteria': 'containing', 'value': '🟠', 'format': format_orange
+    })
+    feuille.conditional_format(1, statut_col, len(df_simple), statut_col, {
+        'type': 'text', 'criteria': 'containing', 'value': '🔴', 'format': format_rouge
+    })
 
     # Nettoyage doublons
     df_simple["Capteur"] = df_simple["Capteur"].astype(str).str.strip()
@@ -335,9 +382,10 @@ for i, main_file in enumerate(uploaded_files):
 df_global = pd.DataFrame(table_globale)
 df_global.to_excel(writer_global, index=False, sheet_name="Synthèse globale")
 
-# === Finaliser et télécharger ===
+# 🔒 Clôturer proprement le fichier Excel
 writer_global.close()
 
+# 📥 Bouton de téléchargement du rapport global
 st.subheader("📤 Export global de tous les fichiers")
 st.download_button(
     label="📥 Télécharger le rapport global Excel",
