@@ -79,8 +79,7 @@ for i, main_file in enumerate(uploaded_files):
     
 
 # --- Analyse simple ---
-def analyse_simplifiee(df, capteurs_reference=None):
-    st.subheader("Présentes vs Manquantes – Méthode simple")
+def analyse_simplifiee(df, capteurs_reference=None, afficher=True):
     total = len(df)
     resume = []
 
