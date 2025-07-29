@@ -79,7 +79,7 @@ for i, main_file in enumerate(uploaded_files):
     
 
 # --- Analyse simple ---
-def analyse_simplifiee(df, capteurs_reference=None, afficher=True):
+def analyse_simplifiee(df, capteurs_reference=None, afficher=True, fichier_nom=None):
     total = len(df)
     resume = []
 
@@ -104,27 +104,31 @@ def analyse_simplifiee(df, capteurs_reference=None, afficher=True):
 
     df_resume = pd.DataFrame(resume)
 
-    # Affichage tableau
-    st.dataframe(df_resume, use_container_width=True)
+    if afficher:
+        titre = f"📊 Données présentes vs manquantes"
+        if fichier_nom:
+            titre += f" – `{fichier_nom}`"
+        st.subheader(titre)
+        st.dataframe(df_resume, use_container_width=True)
 
-    # Graphique horizontal
-    #df_plot = df_resume.sort_values(by="% Présentes", ascending=True)
-    #fig, ax = plt.subplots(figsize=(10, max(6, len(df_plot) * 0.25)))
-    #sns.barplot(
-    #    data=df_plot,
-    #    y="Capteur",
-    #    x="% Présentes",
-    #    hue="Statut",
-    #    dodge=False,
-    #    palette={"🟢": "green", "🟠": "orange", "🔴": "red"},
-    #    ax=ax
-    #)
-    #plt.title("Pourcentage de données présentes par capteur", fontsize=14)
-    #plt.xlabel("% Présentes")
-    #plt.ylabel("Capteur")
-    #plt.xlim(0, 100)
-    #plt.tight_layout()
-    #st.pyplot(fig)
+        # Graphique horizontal
+        df_plot = df_resume.sort_values(by="% Présentes", ascending=True)
+        fig, ax = plt.subplots(figsize=(10, max(6, len(df_plot) * 0.25)))
+        sns.barplot(
+            data=df_plot,
+            y="Capteur",
+            x="% Présentes",
+            hue="Statut",
+            dodge=False,
+            palette={"🟢": "green", "🟠": "orange", "🔴": "red"},
+            ax=ax
+        )
+        plt.title("Pourcentage de données présentes par capteur", fontsize=14)
+        plt.xlabel("% Présentes")
+        plt.ylabel("Capteur")
+        plt.xlim(0, 100)
+        plt.tight_layout()
+        st.pyplot(fig)
 
     return df_resume
 
