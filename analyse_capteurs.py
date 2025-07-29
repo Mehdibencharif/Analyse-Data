@@ -109,32 +109,38 @@ for i, main_file in enumerate(uploaded_files):
     df_main = charger_et_resampler(main_file, f"Fichier principal {i+1}")
     
 
-# --- Analyse simple ---
+# --- Analyse simple des capteurs ---
 def analyse_simplifiee(df, capteurs_reference=None, afficher=True, fichier_nom=None):
     total = len(df)
     resume = []
 
+    # Analyse de toutes les colonnes sauf timestamp et notes
     for col in df.columns:
-        if col.lower() in ['timestamp', 'notes']:
+        if col.lower().strip() in ['timestamp', 'notes']:
             continue
 
+        col_name = col.strip()
         presente = df[col].notna().sum()
         manquantes = total - presente
         pct_presente = 100 * presente / total if total > 0 else 0
         pct_manquantes = 100 - pct_presente
+
+        # Code couleur du statut
         statut = "🟢" if pct_presente >= 80 else ("🟠" if pct_presente > 0 else "🔴")
 
         resume.append({
-            "Capteur": col.strip(),
-            "Présentes": presente,
+            "Capteur": col_name,
+            "Présentes": int(presente),
             "% Présentes": round(pct_presente, 2),
-            "Manquantes": manquantes,
+            "Manquantes": int(manquantes),
             "% Manquantes": round(pct_manquantes, 2),
             "Statut": statut
         })
 
+    # Création du DataFrame résumé
     df_resume = pd.DataFrame(resume)
 
+    # Affichage facultatif dans Streamlit
     if afficher:
         titre = f"📊 Données présentes vs manquantes"
         if fichier_nom:
@@ -142,7 +148,7 @@ def analyse_simplifiee(df, capteurs_reference=None, afficher=True, fichier_nom=N
         st.subheader(titre)
         st.dataframe(df_resume, use_container_width=True)
 
-        # Graphique horizontal
+        # 📈 Graphique horizontal classé
         df_plot = df_resume.sort_values(by="% Présentes", ascending=True)
         fig, ax = plt.subplots(figsize=(10, max(6, len(df_plot) * 0.25)))
         sns.barplot(
@@ -162,7 +168,7 @@ def analyse_simplifiee(df, capteurs_reference=None, afficher=True, fichier_nom=N
         st.pyplot(fig)
 
     return df_resume
-
+    
 # 📊 Analyse simple avec validation
 df_simple = analyse_simplifiee(df_main, capteurs_reference)
 
