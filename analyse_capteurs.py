@@ -1,14 +1,45 @@
+# === Imports ===
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from io import BytesIO
-from datetime import timedelta
+from pathlib import Path
+import re
 
 # ------------- Configuration de la page Streamlit -------------
 st.set_page_config(page_title="Analyse de données capteurs", layout="wide")
 st.title("📊 Analyse de données ")
 
+# === Fonctions utilitaires ===
+
+# Fonction pour analyser la complétude
+def analyser_completude(df):
+    if "timestamp" not in df.columns:
+        st.error("❌ La colonne 'timestamp' est manquante.")
+        return pd.DataFrame()
+
+    total = len(df)
+    resultat = []
+
+    for col in df.select_dtypes(include="number").columns:
+        presente = df[col].notna().sum()
+        manquantes = total - presente
+        pct_presente = 100 * presente / total if total > 0 else 0
+        pct_manquantes = 100 - pct_presente
+        statut = "🟢" if pct_presente >= 80 else ("🟠" if pct_presente > 0 else "🔴")
+
+        resultat.append({
+            "Capteur": col.strip(),
+            "Présentes": int(presente),
+            "% Présentes": round(pct_presente, 2),
+            "Manquantes": int(manquantes),
+            "% Manquantes": round(pct_manquantes, 2),
+            "Statut": statut
+        })
+
+    return pd.DataFrame(resultat)
+    
 # ------------- Paramètres de fréquence d'analyse -------------
 st.sidebar.header("Paramètres d'analyse")
 frequence = st.sidebar.selectbox(
