@@ -187,13 +187,19 @@ if capteurs_reference is not None and len(capteurs_reference) > 0:
 
 
 # --- Analyse de complétude sans rééchantillonnage ---
-# --- Fonction de rééchantillonnage ---
 def resampler_df(df, frequence_str):
     if "timestamp" not in df.columns:
         return df
+
     df = df.set_index("timestamp")
-    df = df.resample(rule_map[frequence_str]).mean()
-    return df.reset_index()
+
+    # On sélectionne uniquement les colonnes numériques
+    df_numeric = df.select_dtypes(include="number")
+
+    # Rééchantillonnage sur les données numériques uniquement
+    df_resampled = df_numeric.resample(rule_map[frequence_str]).mean()
+
+    return df_resampled.reset_index()
 
 # --- Analyse de complétude ---
 def analyser_completude(df):
