@@ -187,6 +187,15 @@ if capteurs_reference is not None and len(capteurs_reference) > 0:
 
 
 # --- Analyse de complétude sans rééchantillonnage ---
+# --- Fonction de rééchantillonnage ---
+def resampler_df(df, frequence_str):
+    if "timestamp" not in df.columns:
+        return df
+    df = df.set_index("timestamp")
+    df = df.resample(rule_map[frequence_str]).mean()
+    return df.reset_index()
+
+# --- Analyse de complétude ---
 def analyser_completude(df):
     if "timestamp" not in df.columns:
         st.error("❌ La colonne 'timestamp' est manquante.")
@@ -212,9 +221,10 @@ def analyser_completude(df):
 
     return pd.DataFrame(resultat)
 
-# 📈 Analyse de complétude sans rééchantillonnage
-st.subheader("📈 Analyse de complétude des données brutes")
-stats_main = analyser_completude(df_main)
+# 📈 Analyse de complétude avec rééchantillonnage à la fréquence choisie
+st.subheader(f"📈 Analyse de complétude des données brutes ({frequence})")
+df_resample = resampler_df(df_main, frequence)
+stats_main = analyser_completude(df_resample)
 st.dataframe(stats_main, use_container_width=True)
 
 # 📘 Légende des statuts
@@ -235,6 +245,7 @@ st.markdown(f"""
 -  Capteurs incomplets (🟠) : `{count_orange}`
 -  Capteurs vides (🔴) : `{count_rouge}`
 """)
+
 
 # 📉 Graphique horizontal final
 df_plot = stats_main.sort_values(by="% Présentes", ascending=True)
