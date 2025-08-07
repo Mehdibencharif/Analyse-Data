@@ -187,20 +187,37 @@ if capteurs_reference is not None and len(capteurs_reference) > 0:
 
 
 # --- Analyse de complétude sans rééchantillonnage ---
-# --- Analyse de complétude sans rééchantillonnage ---
 def resampler_df(df, frequence_str):
     if "timestamp" not in df.columns:
+        st.warning("⚠️ Colonne 'timestamp' non trouvée dans le fichier.")
         return df
 
-    df = df.set_index("timestamp")
+    # Affiche la fréquence choisie pour débogage
+    st.info(f"⏱️ Fréquence sélectionnée : {frequence_str}")
 
-    # On sélectionne uniquement les colonnes numériques
-    df_numeric = df.select_dtypes(include="number")
+    # Si fréquence est 1min (pas besoin de rééchantillonnage)
+    if frequence_str == "1min":
+        st.info("✅ Pas de rééchantillonnage nécessaire (1min).")
+        return df.copy()
 
-    # Rééchantillonnage sur les données numériques uniquement
-    df_resampled = df_numeric.resample(rule_map[frequence_str]).mean()
+    try:
+        df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
+        df = df.dropna(subset=["timestamp"])
+        df = df.set_index("timestamp")
 
-    return df_resampled.reset_index()
+        # Garde uniquement les colonnes numériques pour la moyenne
+        df_numeric = df.select_dtypes(include="number")
+
+        # Rééchantillonnage avec moyenne
+        df_resampled = df_numeric.resample(rule_map[frequence_str]).mean().reset_index()
+
+        st.success(f"✅ Données rééchantillonnées avec succès à {frequence_str}.")
+
+        return df_resampled
+
+    except Exception as e:
+        st.error(f"❌ Erreur lors du rééchantillonnage : {e}")
+        return df.reset_index()
 
 # --- Analyse de complétude ---
 def analyser_completude(df):
@@ -331,4 +348,5 @@ st.download_button(
     file_name="rapport_capteurs.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
+
 
