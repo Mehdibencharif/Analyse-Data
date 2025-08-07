@@ -187,6 +187,7 @@ if capteurs_reference is not None and len(capteurs_reference) > 0:
 
 
 # --- Analyse de complétude sans rééchantillonnage ---
+# --- Analyse de complétude sans rééchantillonnage ---
 def resampler_df(df, frequence_str):
     if "timestamp" not in df.columns:
         return df
@@ -330,3 +331,4 @@ st.download_button(
     file_name="rapport_capteurs.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
+
