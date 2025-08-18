@@ -184,7 +184,7 @@ if capteurs_reference_cleaned and len(capteurs_reference_cleaned) > 0:
         df_manquants = pd.DataFrame(manquants, columns=["Capteur (référence manquant dans les données)"])
         st.dataframe(df_manquants, use_container_width=True)
     else:
-st.markdown("✅ Tous les capteurs attendus sont présents dans les données.")      
+    st.markdown("✅ Tous les capteurs attendus sont présents dans les données.")      
 
 # --- Analyse de complétude AVEC rééchantillonnage qui conserve toutes les colonnes ---
 from pandas.api.types import is_numeric_dtype
@@ -364,6 +364,7 @@ st.download_button(
     file_name="rapport_capteurs.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
+
 
 
 
