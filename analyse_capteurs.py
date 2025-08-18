@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from io import BytesIO
 from datetime import timedelta
+import re
 
 # ------------- Configuration de la page Streamlit -------------
 st.set_page_config(page_title="Analyse de données capteurs", layout="wide")
@@ -59,8 +60,7 @@ if not main_file:
 # 📥 Chargement du fichier principal
 df_main = charger_et_resampler(main_file, "Fichier principal")
 
-import re
-
+# -------- Nettoyage des noms de capteurs (pour la comparaison uniquement) --------
 def nettoyer_nom_capteur(nom: str) -> str:
     """
     Supprime les unités entre crochets [] ou parenthèses () et les espaces inutiles.
@@ -80,30 +80,32 @@ df_main_cleaned.columns = [
     for c in df_main_cleaned.columns
 ]
 
-# 🧼 Ensemble de référence nettoyé (si un fichier de référence est fourni)
-capteurs_reference_cleaned = None
-if compare_file:
-    capteurs_reference_cleaned = {
-        nettoyer_nom_capteur(c)
-        for c in df_compare["Description"].astype(str)
-    }
-
-
-# 📑 Lecture du fichier de comparaison (capteurs attendus)
+# 📑 Lecture du fichier de comparaison (capteurs attendus) + versions nettoyées
+df_compare = None
 capteurs_reference = None
+capteurs_reference_cleaned = None
+
 if compare_file:
     try:
         df_compare = pd.read_excel(compare_file)
-        capteurs_reference = set(df_compare["Description"].astype(str).str.strip())
+        if "Description" not in df_compare.columns:
+            st.error("❌ Le fichier de comparaison doit contenir une colonne 'Description'.")
+            st.stop()
+
+        # Ensemble brut + ensemble nettoyé
+        df_compare["Description"] = df_compare["Description"].astype(str).str.strip()
+        capteurs_reference = set(df_compare["Description"])
+        capteurs_reference_cleaned = {nettoyer_nom_capteur(c) for c in capteurs_reference}
+
         st.success("✅ Fichier de comparaison chargé avec succès.")
     except Exception as e:
-        st.error(f"❌ Erreur lors de la lecture du fichier de comparaison : {str(e)}")
+        st.error(f"❌ Erreur lors de la lecture du fichier de comparaison : {e}")
         st.stop()
 else:
-    st.warning("⚠️ Aucun fichier de comparaison n'a été téléversé.")
+    st.info("ℹ️ Aucun fichier de comparaison n'a été téléversé (facultatif).")
 
 # --- Analyse simple ---
-def analyse_simplifiee(df, capteurs_reference=None):
+def analyse_simplifiee(df):
     st.subheader("Présentes vs Manquantes – Méthode simple")
     total = len(df)
     resume = []
@@ -119,64 +121,41 @@ def analyse_simplifiee(df, capteurs_reference=None):
         statut = "🟢" if pct_presente >= 80 else ("🟠" if pct_presente > 0 else "🔴")
 
         resume.append({
-            "Capteur": col.strip(),
-            "Présentes": presente,
+            "Capteur": str(col).strip(),
+            "Présentes": int(presente),
             "% Présentes": round(pct_presente, 2),
-            "Manquantes": manquantes,
+            "Manquantes": int(manquantes),
             "% Manquantes": round(pct_manquantes, 2),
             "Statut": statut
         })
 
     df_resume = pd.DataFrame(resume)
 
+    # Ajout d'une colonne nettoyée pour les comparaisons (sans affecter les noms affichés)
+    df_resume["Nom_nettoye"] = df_resume["Capteur"].astype(str).apply(nettoyer_nom_capteur)
+
     # Affichage tableau
     st.dataframe(df_resume, use_container_width=True)
-
-    # Graphique horizontal
-    #df_plot = df_resume.sort_values(by="% Présentes", ascending=True)
-    #fig, ax = plt.subplots(figsize=(10, max(6, len(df_plot) * 0.25)))
-    #sns.barplot(
-    #    data=df_plot,
-    #    y="Capteur",
-    #    x="% Présentes",
-    #    hue="Statut",
-    #    dodge=False,
-    #    palette={"🟢": "green", "🟠": "orange", "🔴": "red"},
-    #    ax=ax
-    #)
-    #plt.title("Pourcentage de données présentes par capteur", fontsize=14)
-    #plt.xlabel("% Présentes")
-    #plt.ylabel("Capteur")
-    #plt.xlim(0, 100)
-    #plt.tight_layout()
-    #st.pyplot(fig)
-
     return df_resume
 
-# 📊 Analyse simple avec validation
-df_simple = analyse_simplifiee(df_main, capteurs_reference)
+# 📊 Analyse simple (toujours basée sur df_main, non rééchantillonné)
+df_simple = analyse_simplifiee(df_main)
 
 # 🔁 Nettoyage et vérification des doublons
 df_simple["Capteur"] = df_simple["Capteur"].astype(str).str.strip()
-df_simple["Doublon"] = df_simple["Capteur"].duplicated(keep=False).map({True: "🔁 Oui", False: "✅ Non"})
+df_simple["Doublon"] = df_simple["Capteur"].duplicated(keep=False) \
+    .map({True: "🔁 Oui", False: "✅ Non"})
 
 # 🔍 Validation selon la référence (si fournie)
 if capteurs_reference_cleaned and len(capteurs_reference_cleaned) > 0:
-    # 1) Ajoute une colonne "Nom_nettoye" dans le récapitulatif simple
-    df_simple["Nom_nettoye"] = (
-        df_simple["Capteur"]
-        .astype(str)
-        .apply(nettoyer_nom_capteur)
-    )
-
-    # 2) Indique si le capteur figure dans la référence nettoyée
+    # 1) Indication si le capteur figure dans la référence nettoyée
     df_simple["Dans la référence"] = df_simple["Nom_nettoye"].isin(capteurs_reference_cleaned) \
         .map({True: "✅ Oui", False: "❌ Non"})
 
-    # 3) Tri : capteurs validés (✅) d’abord
+    # 2) Tri : capteurs validés (✅) d’abord
     df_simple = df_simple.sort_values(by="Dans la référence", ascending=False).reset_index(drop=True)
 
-    # 4) Affichages séparés
+    # 3) Affichages séparés
     st.subheader("✅ Capteurs trouvés dans la référence")
     df_valides = df_simple[df_simple["Dans la référence"] == "✅ Oui"]
     if not df_valides.empty:
@@ -191,12 +170,12 @@ if capteurs_reference_cleaned and len(capteurs_reference_cleaned) > 0:
     else:
         st.markdown("Tous les capteurs sont présents dans la référence.")
 
-    # 5) Liste brute des noms non reconnus (utile pour un copier/coller)
+    # 4) Liste brute des noms non reconnus (utile pour copier/coller)
     if not df_non_valides.empty:
         st.subheader("Liste brute – Capteurs du fichier principal absents de la référence")
         st.write(df_non_valides["Capteur"].tolist())
 
-    # 6) Capteurs attendus mais absents dans les données analysées
+    # 5) Capteurs attendus mais absents dans les données analysées
     capteurs_trouves = set(df_simple["Nom_nettoye"])
     manquants = sorted(capteurs_reference_cleaned - capteurs_trouves)
     if manquants:
@@ -205,42 +184,47 @@ if capteurs_reference_cleaned and len(capteurs_reference_cleaned) > 0:
         df_manquants = pd.DataFrame(manquants, columns=["Capteur (référence manquant dans les données)"])
         st.dataframe(df_manquants, use_container_width=True)
     else:
-        st.markdown("✅ Tous les capteurs attendus sont présents dans les données.")
+        st.markdown("✅ Tous les capteurs attendus sont présents dans les données.
 
-# --- Analyse de complétude sans rééchantillonnage ---
+# --- Analyse de complétude AVEC rééchantillonnage qui conserve toutes les colonnes ---
+from pandas.api.types import is_numeric_dtype
+
 def resampler_df(df, frequence_str):
     if "timestamp" not in df.columns:
         st.warning("⚠️ Colonne 'timestamp' non trouvée dans le fichier.")
         return df
 
-    # Affiche la fréquence choisie pour débogage
     st.info(f"⏱️ Fréquence sélectionnée : {frequence_str}")
 
-    # Si fréquence est 1min (pas besoin de rééchantillonnage)
+    # Pas de rééchantillonnage demandé
     if frequence_str == "1min":
         st.info("✅ Pas de rééchantillonnage nécessaire (1min).")
         return df.copy()
 
     try:
+        df = df.copy()
         df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
-        df = df.dropna(subset=["timestamp"])
-        df = df.set_index("timestamp")
+        df = df.dropna(subset=["timestamp"]).set_index("timestamp")
 
-        # Garde uniquement les colonnes numériques pour la moyenne
-        df_numeric = df.select_dtypes(include="number")
+        # Plan d'agrégation colonne par colonne :
+        #  - numérique  -> mean
+        #  - non num.   -> first (pour conserver la colonne et permettre l'analyse de complétude)
+        agg_map = {}
+        for col in df.columns:
+            if col.lower() in ("notes",):   # on laisse vivre si tu as une colonne notes
+                agg_map[col] = "first"
+            else:
+                agg_map[col] = "mean" if is_numeric_dtype(df[col]) else "first"
 
-        # Rééchantillonnage avec moyenne
-        df_resampled = df_numeric.resample(rule_map[frequence_str]).mean().reset_index()
-
+        df_resampled = df.resample(rule_map[frequence_str]).agg(agg_map).reset_index()
         st.success(f"✅ Données rééchantillonnées avec succès à {frequence_str}.")
-
         return df_resampled
 
     except Exception as e:
         st.error(f"❌ Erreur lors du rééchantillonnage : {e}")
         return df.reset_index()
 
-# --- Analyse de complétude ---
+# --- Analyse de complétude (par colonne, numérique ou non) ---
 def analyser_completude(df):
     if "timestamp" not in df.columns:
         st.error("❌ La colonne 'timestamp' est manquante.")
@@ -248,36 +232,48 @@ def analyser_completude(df):
 
     total = len(df)
     resultat = []
-    for col in df.select_dtypes(include="number").columns:
-        presente = df[col].notna().sum()
-        manquantes = total - presente
-        pct_presente = 100 * presente / total if total > 0 else 0
+
+    # On analyse TOUTES les colonnes (sauf timestamp et notes)
+    cols = [c for c in df.columns if c.lower() not in ("timestamp", "notes")]
+
+    for col in cols:
+        # présence = entrées non nulles (valable aussi pour objets/texte)
+        presente = int(df[col].notna().sum())
+        manquantes = int(total - presente)
+        pct_presente = 100 * presente / total if total > 0 else 0.0
         pct_manquantes = 100 - pct_presente
-        statut = "🟢" if pct_presente >= 80 else ("🟠" if pct_presente > 0 else "🔴")
+
+        # statut visuel
+        if pct_presente >= 80:
+            statut = "🟢"
+        elif pct_presente > 0:
+            statut = "🟠"
+        else:
+            statut = "🔴"
 
         resultat.append({
-            "Capteur": col.strip(),
-            "Présentes": int(presente),
+            "Capteur": str(col).strip(),
+            "Présentes": presente,
             "% Présentes": round(pct_presente, 2),
-            "Manquantes": int(manquantes),
+            "Manquantes": manquantes,
             "% Manquantes": round(pct_manquantes, 2),
             "Statut": statut
         })
 
     return pd.DataFrame(resultat)
 
-# 📈 Analyse de complétude avec rééchantillonnage à la fréquence choisie
+# 📈 Analyse de complétude avec la fréquence choisie
 st.subheader(f"📈 Analyse de complétude des données brutes ({frequence})")
 df_resample = resampler_df(df_main, frequence)
 stats_main = analyser_completude(df_resample)
 st.dataframe(stats_main, use_container_width=True)
 
-# 📘 Légende des statuts
+# 📘 Légende des statuts (cohérente avec les seuils ci-dessus)
 st.markdown("""
 ### 🧾 Légende des statuts :
-- 🟢 : Capteur exploitable (≥ 80 %)
-- 🟠 : Incomplet (entre 1 % et 79 %)
-- 🔴 : Données absentes (0 %)
+- 🟢 : Capteur exploitable (≥ 80 % de valeurs présentes)
+- 🟠 : Incomplet (entre 1 % et 79 %)
+- 🔴 : Données absentes (0 %)
 """)
 
 # 📌 Résumé numérique des capteurs selon statut
@@ -286,11 +282,10 @@ count_orange = stats_main["Statut"].value_counts().get("🟠", 0)
 count_rouge = stats_main["Statut"].value_counts().get("🔴", 0)
 st.markdown(f"""
 **Résumé des capteurs :**
--  Capteurs exploitables (🟢) : `{count_vert}`
--  Capteurs incomplets (🟠) : `{count_orange}`
--  Capteurs vides (🔴) : `{count_rouge}`
+- Capteurs exploitables (🟢) : `{count_vert}`
+- Capteurs incomplets (🟠) : `{count_orange}`
+- Capteurs vides (🔴) : `{count_rouge}`
 """)
-
 
 # 📉 Graphique horizontal final
 df_plot = stats_main.sort_values(by="% Présentes", ascending=True)
@@ -304,7 +299,7 @@ sns.barplot(
     palette={"🟢": "green", "🟠": "orange", "🔴": "red"},
     ax=ax
 )
-plt.title("Complétude des capteurs - Fichier brut", fontsize=14)
+plt.title("Complétude des capteurs", fontsize=14)
 plt.xlabel("% Données présentes")
 plt.ylabel("Capteur")
 plt.xlim(0, 100)
@@ -369,6 +364,7 @@ st.download_button(
     file_name="rapport_capteurs.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
+
 
 
 
