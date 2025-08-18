@@ -59,6 +59,36 @@ if not main_file:
 # 📥 Chargement du fichier principal
 df_main = charger_et_resampler(main_file, "Fichier principal")
 
+import re
+
+def nettoyer_nom_capteur(nom: str) -> str:
+    """
+    Supprime les unités entre crochets [] ou parenthèses () et les espaces inutiles.
+    Exemples :
+      'Temp-1 [°C]'      -> 'Temp-1'
+      'Débit (Gpm)'      -> 'Débit'
+      'Pression [bar] '  -> 'Pression'
+    """
+    s = str(nom)
+    s = re.sub(r"\s*[\[\(].*?[\]\)]", "", s)  # enlève [ ... ] ou ( ... )
+    return s.strip()
+
+# 🧼 Copie "nettoyée" des colonnes du fichier principal (SEULEMENT pour la comparaison)
+df_main_cleaned = df_main.copy()
+df_main_cleaned.columns = [
+    "timestamp" if c == "timestamp" else nettoyer_nom_capteur(c)
+    for c in df_main_cleaned.columns
+]
+
+# 🧼 Ensemble de référence nettoyé (si un fichier de référence est fourni)
+capteurs_reference_cleaned = None
+if compare_file:
+    capteurs_reference_cleaned = {
+        nettoyer_nom_capteur(c)
+        for c in df_compare["Description"].astype(str)
+    }
+
+
 # 📑 Lecture du fichier de comparaison (capteurs attendus)
 capteurs_reference = None
 if compare_file:
@@ -131,60 +161,51 @@ df_simple["Capteur"] = df_simple["Capteur"].astype(str).str.strip()
 df_simple["Doublon"] = df_simple["Capteur"].duplicated(keep=False).map({True: "🔁 Oui", False: "✅ Non"})
 
 # 🔍 Validation selon la référence (si fournie)
-if capteurs_reference is not None and len(capteurs_reference) > 0:
-    import re
-
-    def nettoyer_nom_capteur(nom):
-        # Supprime les unités entre crochets comme [°C], [dB], [kW], etc.
-        return re.sub(r"\s*\[[^\]]*\]", "", nom).strip()
-
-    # Nettoyage des noms dans la référence
-    capteurs_reference_cleaned = {nettoyer_nom_capteur(c) for c in capteurs_reference}
-
-    # Création d’une colonne "Nom_nettoye" dans le fichier analysé
-    df_simple["Nom_nettoye"] = df_simple["Capteur"].apply(nettoyer_nom_capteur)
-
-    # Comparaison avec les noms nettoyés
-    df_simple["Dans la référence"] = df_simple["Nom_nettoye"].apply(
-        lambda nom: "✅ Oui" if nom in capteurs_reference_cleaned else "❌ Non"
+if capteurs_reference_cleaned and len(capteurs_reference_cleaned) > 0:
+    # 1) Ajoute une colonne "Nom_nettoye" dans le récapitulatif simple
+    df_simple["Nom_nettoye"] = (
+        df_simple["Capteur"]
+        .astype(str)
+        .apply(nettoyer_nom_capteur)
     )
-    
-  # 🔽 Tri : capteurs validés (✅) d’abord, puis ❌
+
+    # 2) Indique si le capteur figure dans la référence nettoyée
+    df_simple["Dans la référence"] = df_simple["Nom_nettoye"].isin(capteurs_reference_cleaned) \
+        .map({True: "✅ Oui", False: "❌ Non"})
+
+    # 3) Tri : capteurs validés (✅) d’abord
     df_simple = df_simple.sort_values(by="Dans la référence", ascending=False).reset_index(drop=True)
 
-    # ✅ Affichage séparé des capteurs
-    st.subheader(" ✅ Capteurs trouvés dans la référence")
+    # 4) Affichages séparés
+    st.subheader("✅ Capteurs trouvés dans la référence")
     df_valides = df_simple[df_simple["Dans la référence"] == "✅ Oui"]
     if not df_valides.empty:
         st.dataframe(df_valides[["Capteur", "Dans la référence", "Doublon"]], use_container_width=True)
     else:
         st.markdown("Aucun capteur valide trouvé.")
 
-    st.subheader(" ❌ Capteurs absents de la référence")
+    st.subheader("❌ Capteurs absents de la référence")
     df_non_valides = df_simple[df_simple["Dans la référence"] == "❌ Non"]
     if not df_non_valides.empty:
         st.dataframe(df_non_valides[["Capteur", "Dans la référence", "Doublon"]], use_container_width=True)
     else:
         st.markdown("Tous les capteurs sont présents dans la référence.")
 
-    # 🔍 Liste brute des noms de capteurs absents dans la référence
+    # 5) Liste brute des noms non reconnus (utile pour un copier/coller)
     if not df_non_valides.empty:
-        st.subheader(" Liste brute – Capteurs du fichier principal absents de la référence")
+        st.subheader("Liste brute – Capteurs du fichier principal absents de la référence")
         st.write(df_non_valides["Capteur"].tolist())
 
-     # 🔎 Capteurs attendus mais absents du fichier principal
+    # 6) Capteurs attendus mais absents dans les données analysées
     capteurs_trouves = set(df_simple["Nom_nettoye"])
     manquants = sorted(capteurs_reference_cleaned - capteurs_trouves)
     if manquants:
-        st.subheader("  Capteurs attendus non trouvés dans les données analysées")
+        st.subheader("Capteurs attendus non trouvés dans les données analysées")
         st.markdown("Voici les capteurs présents dans le fichier de référence mais absents du fichier principal :")
-
-        # Création d’un DataFrame lisible
         df_manquants = pd.DataFrame(manquants, columns=["Capteur (référence manquant dans les données)"])
         st.dataframe(df_manquants, use_container_width=True)
     else:
         st.markdown("✅ Tous les capteurs attendus sont présents dans les données.")
-
 
 # --- Analyse de complétude sans rééchantillonnage ---
 def resampler_df(df, frequence_str):
@@ -348,5 +369,6 @@ st.download_button(
     file_name="rapport_capteurs.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
+
 
 
