@@ -5,6 +5,35 @@ import seaborn as sns
 from io import BytesIO
 from datetime import timedelta
 import re
+import unicodedata
+
+# Valeurs considérées comme "vides" ou "nulles"
+PLACEHOLDER_NULLS = {"", " ", "-", "—", "–", "NA", "N/A", "na", "n/a", "null", "None"}
+
+def series_with_true_nans(s: pd.Series) -> pd.Series:
+    """Transforme les placeholders en vrais NaN pour bien compter les manquants."""
+    if s.dtype == object:
+        s = s.astype(str).str.strip()
+        s = s.replace(list(PLACEHOLDER_NULLS), pd.NA)
+        s = s.replace(r"^\s+$", pd.NA, regex=True)
+    return s
+
+# Motif pour reconnaître les colonnes de température
+TEMP_NAME_RE = re.compile(r"(?i)(temp|temperature|°\s*c|degc|degre|°c|\[°c\])")
+
+def coerce_temperature_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Convertit les colonnes de température en float (NaN si non numérique)."""
+    for col in df.columns:
+        if col.lower() in ("timestamp", "notes"):
+            continue
+        name = str(col)
+        if TEMP_NAME_RE.search(name):
+            s = df[col]
+            if s.dtype == object:
+                s = s.astype(str).str.replace(",", ".", regex=False).str.strip()
+                s = s.replace(list(PLACEHOLDER_NULLS), pd.NA)
+            df[col] = pd.to_numeric(s, errors="coerce")
+    return df
 
 # ------------- Configuration de la page Streamlit -------------
 st.set_page_config(page_title="Analyse de données capteurs", layout="wide")
@@ -59,6 +88,9 @@ if not main_file:
 
 # 📥 Chargement du fichier principal
 df_main = charger_et_resampler(main_file, "Fichier principal")
+
+# 🧼 Conversion des colonnes de température en numérique
+df_main = coerce_temperature_columns(df_main)
 
 # -------- Nettoyage des noms de capteurs (pour la comparaison uniquement) --------
 def nettoyer_nom_capteur(nom: str) -> str:
@@ -364,6 +396,7 @@ st.download_button(
     file_name="rapport_capteurs.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
+
 
 
 
