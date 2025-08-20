@@ -198,6 +198,8 @@ df_simple = analyse_simplifiee(df_main)
 df_simple["Capteur"] = df_simple["Capteur"].astype(str).str.strip()
 df_simple["Doublon"] = df_simple["Capteur"].duplicated(keep=False) \
     .map({True: "🔁 Oui", False: "✅ Non"})
+# 🧹 Suppression des doublons basés sur le nom nettoyé (on garde la dernière version, la plus "propre")
+df_simple = df_simple.drop_duplicates(subset=["Nom_nettoye"], keep="last").reset_index(drop=True)
 
 # 🔍 Validation selon la référence (si fournie)
 if capteurs_reference_cleaned and len(capteurs_reference_cleaned) > 0:
@@ -320,6 +322,8 @@ st.subheader(f"📈 Analyse de complétude des données brutes ({frequence})")
 df_resample = resampler_df(df_main, frequence)
 stats_main = analyser_completude(df_resample)
 st.dataframe(stats_main, use_container_width=True)
+# 🧹 Suppression des doublons sur la colonne Capteur (ex: Énergie-Froid apparaît 2 fois)
+stats_main = stats_main.drop_duplicates(subset=["Capteur"], keep="last").reset_index(drop=True)
 
 # 📘 Légende des statuts (cohérente avec les seuils ci-dessus)
 st.markdown("""
@@ -417,6 +421,7 @@ st.download_button(
     file_name="rapport_capteurs.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
+
 
 
 
