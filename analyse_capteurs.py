@@ -7,6 +7,26 @@ from datetime import timedelta
 import re
 import unicodedata
 
+from pandas.api.types import is_numeric_dtype
+
+def coerce_numeric_general(df: pd.DataFrame, threshold: float = 0.6) -> pd.DataFrame:
+    """
+    Force les colonnes majoritairement numériques en float.
+    Les placeholders ou textes parasites deviennent NaN.
+    """
+    for col in df.columns:
+        if col.lower() in ("timestamp", "notes"):
+            continue
+        s = df[col]
+        if not is_numeric_dtype(s):
+            s2 = s.astype(str).str.replace(",", ".", regex=False).str.strip()
+            s2 = s2.replace(list(PLACEHOLDER_NULLS), pd.NA)
+            numeric = pd.to_numeric(s2, errors="coerce")
+            # si la majorité est numérique, on conserve
+            if numeric.notna().mean() >= threshold:
+                df[col] = numeric
+    return df
+    
 # Valeurs considérées comme "vides" ou "nulles"
 PLACEHOLDER_NULLS = {"", " ", "-", "—", "–", "NA", "N/A", "na", "n/a", "null", "None"}
 
@@ -91,6 +111,7 @@ df_main = charger_et_resampler(main_file, "Fichier principal")
 
 # 🧼 Conversion des colonnes de température en numérique
 df_main = coerce_temperature_columns(df_main)
+df_main = coerce_numeric_general(df_main)  # 🔧 force toutes les colonnes majoritairement numériques
 
 # -------- Nettoyage des noms de capteurs (pour la comparaison uniquement) --------
 def nettoyer_nom_capteur(nom: str) -> str:
@@ -396,6 +417,7 @@ st.download_button(
     file_name="rapport_capteurs.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
+
 
 
 
