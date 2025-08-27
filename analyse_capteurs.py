@@ -5,8 +5,8 @@ import seaborn as sns
 from io import BytesIO
 from datetime import timedelta
 import re
+import hashlib
 import unicodedata
-
 from pandas.api.types import is_numeric_dtype
 
 # ----------------------------- Utilitaires "qualité data" -----------------------------
@@ -87,14 +87,38 @@ compare_file = st.sidebar.file_uploader(
     key="compare"
 )
 
+# --- Hash & reset d'état pour prouver qu'on lit bien un nouveau fichier
+def file_sha1(uploaded):
+    data = uploaded.getvalue() if uploaded is not None else b""
+    return hashlib.sha1(data).hexdigest()[:10]
+
+if main_file:
+    st.sidebar.caption(f"Hash fichier principal : `{file_sha1(main_file)}`")
+if compare_file:
+    st.sidebar.caption(f"Hash fichier comparaison : `{file_sha1(compare_file)}`")
+
+if "last_main_sha1" not in st.session_state:
+    st.session_state.last_main_sha1 = None
+curr_sha1 = file_sha1(main_file) if main_file else None
+if curr_sha1 and curr_sha1 != st.session_state.last_main_sha1:
+    # on oublie la sélection de feuille liée à l'ancien fichier
+    for k in list(st.session_state.keys()):
+        if str(k).startswith("Fichier principal_sheet_"):
+            del st.session_state[k]
+    st.session_state.last_main_sha1 = curr_sha1
+
 # ----------------------------- Chargement fichier -----------------------------
 
 def charger_et_resampler(fichier, nom_fichier):
-    xls = pd.ExcelFile(fichier)
+    # on fige les bytes pour créer une clé unique du selectbox
+    raw = fichier.getvalue()
+    xls = pd.ExcelFile(BytesIO(raw))
+    sheet_key = f"{nom_fichier}_sheet_{hashlib.sha1(raw).hexdigest()[:8]}"  # clé UI unique par fichier
+
     feuille = xls.sheet_names[0] if len(xls.sheet_names) == 1 else st.selectbox(
         f"📄 Feuille à utiliser pour {nom_fichier}",
         xls.sheet_names,
-        key=nom_fichier
+        key=sheet_key
     )
     df = pd.read_excel(xls, sheet_name=feuille)
     df.columns = [str(c).strip() for c in df.columns]
@@ -103,16 +127,31 @@ def charger_et_resampler(fichier, nom_fichier):
     df = df.dropna(subset=["timestamp"]).sort_values("timestamp").reset_index(drop=True)
     return df
 
+# --- Stop si pas de fichier principal
 if not main_file:
     st.warning("⚠️ Veuillez téléverser un fichier principal pour démarrer l’analyse.")
     st.stop()
 
-# 📥 Chargement du fichier principal
-df_main = charger_et_resampler(main_file, "Fichier principal")
+# --- Filtre temporel (widgets en sidebar)
+st.sidebar.subheader("Filtre temporel (optionnel)")
+date_deb = st.sidebar.date_input("Début", value=None)
+date_fin = st.sidebar.date_input("Fin", value=None)
 
-# (Optionnel) conversions utiles pour d’autres vues/charts, sans impacter la complétude
+def filtrer_periode(df):
+    if date_deb:
+        df = df[df["timestamp"] >= pd.Timestamp(date_deb)]
+    if date_fin:
+        df = df[df["timestamp"] <= pd.Timestamp(date_fin) + pd.Timedelta(days=1) - pd.Timedelta(microseconds=1)]
+    return df
+
+# --- Chargement + conversions + filtre
+df_main = charger_et_resampler(main_file, "Fichier principal")
 df_main = coerce_temperature_columns(df_main)
 df_main = coerce_numeric_general(df_main)
+df_main = filtrer_periode(df_main)
+
+if not df_main.empty:
+    st.sidebar.caption(f"Période détectée : {df_main['timestamp'].min()} → {df_main['timestamp'].max()}")
 
 # ----------------------------- Nettoyage noms (comparaison) -----------------------------
 
@@ -142,7 +181,7 @@ capteurs_reference_cleaned = None
 
 if compare_file:
     try:
-        df_compare = pd.read_excel(compare_file)
+        df_compare = pd.read_excel(BytesIO(compare_file.getvalue()))
         if "Description" not in df_compare.columns:
             st.error("❌ Le fichier de comparaison doit contenir une colonne 'Description'.")
             st.stop()
@@ -169,7 +208,7 @@ def analyse_simplifiee(df):
         if col.lower() in ['timestamp', 'notes']:
             continue
 
-        # FIX: compter avec placeholders -> NaN
+        # compter avec placeholders -> NaN
         s = series_with_true_nans(df[col])
         presente = s.notna().sum()
         manquantes = total - presente
@@ -251,7 +290,6 @@ def resampler_df(df, frequence_str):
         df = df.copy()
         df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
         df = df.dropna(subset=["timestamp"])
-        # (Optionnel) verrouiller la grille
         freq = rule_map[frequence_str]
         df["timestamp"] = df["timestamp"].dt.floor(freq)
         df = df.set_index("timestamp")
@@ -332,7 +370,7 @@ def analyser_completude_freq(df: pd.DataFrame, frequence_str: str, rule_map: dic
 
 st.subheader(f"📈 Analyse de complétude des données brutes ({frequence})")
 
-# FIX: NE PAS utiliser resampler_df pour la complétude
+# NE PAS utiliser resampler_df pour la complétude
 stats_main = analyser_completude_freq(df_main, frequence, rule_map)
 
 # Déduplication d'affichage (au cas où des noms identiques ressortent)
@@ -344,7 +382,7 @@ st.dataframe(stats_main, use_container_width=True)
 
 st.markdown("""
 ### 🧾 Légende des statuts :
-- 🟢 : Capteur exploitable (≥ 80 % de valeurs présentes)
+- 🟢 : Capteur exploitable (≥80 % de valeurs présentes)
 - 🟠 : Incomplet (entre 1 % et 79 %)
 - 🔴 : Données absentes (0 %)
 """)
@@ -352,6 +390,7 @@ st.markdown("""
 count_vert = stats_main["Statut"].value_counts().get("🟢", 0)
 count_orange = stats_main["Statut"].value_counts().get("🟠", 0)
 count_rouge = stats_main["Statut"].value_counts().get("🔴", 0)
+
 st.markdown(f"""
 **Résumé des capteurs :**
 - Capteurs exploitables (🟢) : `{count_vert}`
@@ -359,8 +398,14 @@ st.markdown(f"""
 - Capteurs vides (🔴) : `{count_rouge}`
 """)
 
-# ----------------------------- Graphique -----------------------------
+# (optionnel) petits indicateurs de sanity-check
+st.caption(f"⏱️ Lignes analysées : {len(df_main)}")
+st.caption(
+    f"🧮 Colonnes (hors timestamp/notes) : "
+    f"{len([c for c in df_main.columns if str(c).lower() not in ('timestamp','notes')])}"
+)
 
+# ----------------------------- Graphique -----------------------------
 df_plot = stats_main.sort_values(by="% Présentes", ascending=True)
 fig, ax = plt.subplots(figsize=(10, max(6, len(df_plot) * 0.25)))
 sns.barplot(
@@ -380,23 +425,24 @@ plt.tight_layout()
 st.pyplot(fig)
 
 # ----------------------------- Export Excel -----------------------------
-
 st.subheader("📤 Export des résultats (Excel)")
 
 output = BytesIO()
 with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+    # Feuille 1 : résumé simple
     df_simple.to_excel(writer, index=False, sheet_name="Résumé capteurs")
+    # Feuille 2 : complétude brute
     stats_main.to_excel(writer, index=False, sheet_name="Complétude brute")
 
-    if 'df_non_valides' in locals() and not df_non_valides.empty:
+    # Feuilles optionnelles si elles existent
+    if 'df_non_valides' in locals() and df_non_valides is not None and not df_non_valides.empty:
         df_non_valides.to_excel(writer, index=False, sheet_name="Capteurs non reconnus")
 
-    if 'df_manquants' in locals() and not df_manquants.empty:
+    if 'df_manquants' in locals() and df_manquants is not None and not df_manquants.empty:
         df_manquants.to_excel(writer, index=False, sheet_name="Capteurs manquants")
 
+    # Mise en forme conditionnelle
     workbook  = writer.book
-
-    #  Format couleur selon le statut
     format_vert = workbook.add_format({'bg_color': '#C6EFCE', 'font_color': '#006100'})
     format_orange = workbook.add_format({'bg_color': '#FFEB9C', 'font_color': '#9C5700'})
     format_rouge = workbook.add_format({'bg_color': '#FFC7CE', 'font_color': '#9C0006'})
@@ -405,17 +451,17 @@ with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
     feuille = writer.sheets["Résumé capteurs"]
     statut_col = df_simple.columns.get_loc("Statut")
     feuille.conditional_format(1, statut_col, len(df_simple), statut_col, {
-        'type':     'text', 'criteria': 'containing', 'value': '🟢', 'format': format_vert
+        'type': 'text', 'criteria': 'containing', 'value': '🟢', 'format': format_vert
     })
     feuille.conditional_format(1, statut_col, len(df_simple), statut_col, {
-        'type':     'text', 'criteria': 'containing', 'value': '🟠', 'format': format_orange
+        'type': 'text', 'criteria': 'containing', 'value': '🟠', 'format': format_orange
     })
     feuille.conditional_format(1, statut_col, len(df_simple), statut_col, {
-        'type':     'text', 'criteria': 'containing', 'value': '🔴', 'format': format_rouge
+        'type': 'text', 'criteria': 'containing', 'value': '🔴', 'format': format_rouge
     })
 
 st.download_button(
-    label="📥 Télécharger le rapport Excel ",
+    label="📥 Télécharger le rapport Excel",
     data=output.getvalue(),
     file_name="rapport_capteurs.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
