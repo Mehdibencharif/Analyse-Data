@@ -241,28 +241,56 @@ def filtrer_periode(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 # ----------------------------- Chargement + conversions + filtre -----------------------------
+
 df_main = charger_fichier_excel(main_file, "Fichier principal")
+
+# sécurité : fichier vide ou mal lu
+if df_main is None or df_main.empty:
+    st.warning("⚠️ Aucune donnée lue dans le fichier (ou feuille vide).")
+    st.stop()
+
+# sécurité : timestamp obligatoire
+if "timestamp" not in df_main.columns:
+    st.error("❌ Colonne 'timestamp' introuvable (la 1ère colonne devrait être un temps/date).")
+    st.stop()
 
 # conversions (temp d'abord, puis général)
 df_main = coerce_temperature_columns(df_main)
 df_main = coerce_numeric_general(df_main)
+
+# re-sécurise timestamp (au cas où)
+df_main["timestamp"] = pd.to_datetime(df_main["timestamp"], errors="coerce")
+df_main = df_main.dropna(subset=["timestamp"])
 
 # filtre période
 df_main = filtrer_periode(df_main)
 
 # affichage période + pas détecté
 if not df_main.empty:
-    st.sidebar.caption(f"Période détectée : {df_main['timestamp'].min()} → {df_main['timestamp'].max()}")
+    tmin = df_main["timestamp"].min()
+    tmax = df_main["timestamp"].max()
+    st.sidebar.caption(f"Période détectée : {tmin} → {tmax}")
 
-    step_info = detect_sampling_step(df_main, "timestamp")
+    # détection pas (protégée)
+    try:
+        step_info = detect_sampling_step(df_main, "timestamp")
+    except NameError:
+        step_info = {"median_min": None, "mode_min": None, "summary": None}
+        st.sidebar.error("❌ detect_sampling_step() n'est pas défini. Mets la fonction dans le bloc 1, avant cet appel.")
+    except Exception as e:
+        step_info = {"median_min": None, "mode_min": None, "summary": None}
+        st.sidebar.error(f"❌ Erreur détection pas : {e}")
+
     if step_info.get("median_min") is not None:
         st.sidebar.success(
-            f"⏱️ Pas détecté (médian): {step_info['median_min']:.2f} min\n"
-            f"📌 Pas le + fréquent: {step_info['mode_min']:.2f} min"
+            f"⏱️ Pas détecté (médian) : {step_info['median_min']:.2f} min\n"
+            f"📌 Pas le + fréquent : {step_info['mode_min']:.2f} min"
         )
-        st.sidebar.caption(f"Top pas: {step_info.get('summary')}")
+        if step_info.get("summary"):
+            st.sidebar.caption(f"Top pas : {step_info['summary']}")
     else:
-        st.sidebar.warning("⏱️ Pas de remontée non détectable (timestamps insuffisants).")
+        st.sidebar.warning("⏱️ Pas de remontée non détectable (timestamps insuffisants ou irréguliers).")
+
 else:
     st.warning("⚠️ Aucune donnée valide après chargement/filtrage.")
     st.stop()
@@ -719,6 +747,7 @@ st.download_button(
     file_name="rapport_capteurs.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
+
 
 
 
