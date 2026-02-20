@@ -163,9 +163,6 @@ if curr_sha1 is not None and curr_sha1 != st.session_state["last_main_sha1"]:
             del st.session_state[k]
 
     st.session_state["last_main_sha1"] = curr_sha1
-
-
-
     
 #----- Bloc 3 -------------#
 # ----------------------------- Chargement fichier -----------------------------
@@ -498,19 +495,76 @@ def build_presence_indicator(df: pd.DataFrame) -> pd.DataFrame:
 def analyser_completude_freq(df: pd.DataFrame, frequence_str: str, rule_map: dict) -> pd.DataFrame:
     """
     Calcule la complétude à partir d'un indicateur de présence.
-    - Si frequence_str == '1min' : on compte ligne par ligne.
-    - Sinon : on regroupe par bins et un bin est "présent" s'il y a AU MOINS UNE valeur dans le bin.
+    Retourne TOUJOURS un DataFrame.
     """
     base_cols = ["Capteur", "Présentes", "% Présentes", "Manquantes", "% Manquantes", "Statut"]
 
-    if df is None or df.empty:
+    # ✅ debug visible (tu peux enlever après)
+    # st.caption("DEBUG: analyser_completude_freq() appelée")
+
+    # garde-fous
+    if df is None or not isinstance(df, pd.DataFrame) or df.empty:
         return pd.DataFrame(columns=base_cols)
+
+    if "timestamp" not in df.columns:
+        st.error("❌ La colonne 'timestamp' est manquante.")
+        return pd.DataFrame(columns=base_cols)
+
+    df2 = df.copy()
+    df2["timestamp"] = pd.to_datetime(df2["timestamp"], errors="coerce")
+    df2 = df2.dropna(subset=["timestamp"]).sort_values("timestamp").reset_index(drop=True)
+
+    if df2.empty:
+        return pd.DataFrame(columns=base_cols)
+
+    ind = build_presence_indicator(df2)
+    ind.index = df2["timestamp"]
+
+    if frequence_str != "1min":
+        if frequence_str not in rule_map:
+            st.error("❌ Fréquence invalide.")
+            return pd.DataFrame(columns=base_cols)
+
+        freq = rule_map[frequence_str]
+        ind_bin = ind.resample(freq).max()  # bin présent si au moins une valeur
+        total_expected = float(len(ind_bin.index))
+        if total_expected == 0:
+            return pd.DataFrame(columns=base_cols)
+
+        total_present = ind_bin.fillna(0).sum(axis=0)
+    else:
+        total_expected = float(len(ind))
+        if total_expected == 0:
+            return pd.DataFrame(columns=base_cols)
+
+        total_present = ind.fillna(0).sum(axis=0)
+
+    rows = []
+    for c in ind.columns:
+        pres = float(total_present.get(c, 0.0))
+        pct = 100.0 * pres / total_expected
+        statut = "🟢" if pct >= 80 else ("🟠" if pct > 0 else "🔴")
+
+        rows.append({
+            "Capteur": str(c),
+            "Présentes": int(round(pres)),
+            "% Présentes": round(pct, 2),
+            "Manquantes": int(round(total_expected - pres)),
+            "% Manquantes": round(100.0 - pct, 2),
+            "Statut": statut
+        })
+
+    return pd.DataFrame(rows, columns=base_cols)
 
 
 #----- Bloc 7 -------------#
 st.subheader(f"📈 Analyse de complétude des données brutes ({frequence})")
 
 stats_main = analyser_completude_freq(df_main_cleaned, frequence, rule_map)
+
+st.write("DEBUG type stats_main:", type(stats_main))
+st.write("DEBUG colonnes stats_main:", list(stats_main.columns) if isinstance(stats_main, pd.DataFrame) else stats_main)
+
 
 # ✅ Sécurités AVANT toute manipulation
 if stats_main is None or not isinstance(stats_main, pd.DataFrame):
@@ -647,6 +701,7 @@ st.download_button(
     file_name="rapport_capteurs.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
+
 
 
 
