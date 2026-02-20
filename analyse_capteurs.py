@@ -596,36 +596,42 @@ st.subheader(f"📈 Analyse de complétude des données brutes ({frequence})")
 # 1) Calcul complétude
 stats_main = analyser_completude_freq(df_main_cleaned, frequence, rule_map)
 
-st.write("DEBUG type stats_main:", type(stats_main))
-st.write("DEBUG stats_main est DataFrame ?", isinstance(stats_main, pd.DataFrame))
-if isinstance(stats_main, pd.DataFrame):
-    st.write("DEBUG shape:", stats_main.shape)
-    st.write("DEBUG colonnes:", list(stats_main.columns))
-    st.dataframe(stats_main.head(20), use_container_width=True)
-else:
-    st.write("DEBUG valeur brute stats_main:", stats_main)
+# ✅ DEBUG "safe" (n'affiche pas la doc)
+st.write("DEBUG type stats_main:", str(type(stats_main)))
+st.write("DEBUG est DataFrame ?", isinstance(stats_main, pd.DataFrame))
 
+# Cas très fréquent : stats_main = la CLASSE DataFrame (erreur d'affectation quelque part)
+if stats_main is pd.DataFrame or isinstance(stats_main, type):
+    st.error("⛔ stats_main est la classe pd.DataFrame (et non un DataFrame). Vérifie un 'stats_main = pd.DataFrame' sans ()")
+    st.stop()
 
 # 2) Sécurités AVANT manip
 if stats_main is None or not isinstance(stats_main, pd.DataFrame):
     st.error("⛔ analyser_completude_freq() n'a pas retourné un DataFrame (stats_main est None ou invalide).")
+    st.write("DEBUG valeur brute stats_main:", stats_main)
     st.stop()
 
 expected_cols = ["Capteur", "Présentes", "% Présentes", "Manquantes", "% Manquantes", "Statut"]
 missing = [c for c in expected_cols if c not in stats_main.columns]
 if missing:
-    st.error(f"⛔ Colonnes manquantes dans stats_main : {missing} | Colonnes trouvées : {list(stats_main.columns)}")
+    st.error(f"⛔ Colonnes manquantes dans stats_main : {missing}")
+    st.write("DEBUG colonnes trouvées:", list(stats_main.columns))
     st.stop()
 
-# 3) Si vide : on affiche, mais on ne stop pas forcément (tu peux choisir)
+# 3) Affichage / nettoyage
 if stats_main.empty:
     st.warning("⚠️ Résultat complétude vide (aucun capteur ou aucune donnée exploitable).")
     st.dataframe(stats_main, use_container_width=True)
 else:
-    # Nettoyage capteur + dédup
+    stats_main = stats_main.copy()
     stats_main["Capteur"] = stats_main["Capteur"].astype(str).str.strip()
     stats_main = stats_main.drop_duplicates(subset=["Capteur"], keep="last").reset_index(drop=True)
+
+    st.write("DEBUG shape:", stats_main.shape)
+    st.write("DEBUG colonnes:", list(stats_main.columns))
+    st.dataframe(stats_main.head(20), use_container_width=True)
     st.dataframe(stats_main, use_container_width=True)
+
 
 # ----------------------------- Légende + Résumé -----------------------------
 st.markdown("""
@@ -754,6 +760,7 @@ st.download_button(
     file_name="rapport_capteurs.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
+
 
 
 
