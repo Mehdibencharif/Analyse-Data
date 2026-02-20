@@ -57,6 +57,44 @@ def coerce_temperature_columns(df: pd.DataFrame) -> pd.DataFrame:
             df[col] = pd.to_numeric(s, errors="coerce")
     return df
 
+def detect_sampling_step(df: pd.DataFrame, time_col: str = "timestamp") -> dict:
+    """
+    Détecte automatiquement le pas de remontée à partir des timestamps.
+    Retourne: mediane, mode (pas le plus fréquent), et un mini résumé.
+    """
+    if time_col not in df.columns or df.empty:
+        return {"median": None, "mode": None, "summary": None}
+
+    ts = pd.to_datetime(df[time_col], errors="coerce").dropna().sort_values()
+    if len(ts) < 3:
+        return {"median": None, "mode": None, "summary": None}
+
+    deltas = ts.diff().dropna()
+    # enlève les deltas 0 (doublons)
+    deltas = deltas[deltas > pd.Timedelta(0)]
+    if deltas.empty:
+        return {"median": None, "mode": None, "summary": None}
+
+    median_td = deltas.median()
+    # mode approx : delta le plus fréquent
+    mode_td = deltas.value_counts().idxmax()
+
+    # conversion minutes
+    median_min = median_td.total_seconds() / 60
+    mode_min = mode_td.total_seconds() / 60
+
+    # petit résumé des 3 pas les plus fréquents
+    top = deltas.value_counts().head(3)
+    top_txt = ", ".join([f"{td} ({cnt})" for td, cnt in top.items()])
+
+    return {
+        "median": median_td,
+        "mode": mode_td,
+        "median_min": median_min,
+        "mode_min": mode_min,
+        "summary": top_txt
+    }
+
 # ----------------------------- Streamlit : page & paramètres -----------------------------
 
 st.set_page_config(page_title="Analyse de données capteurs", layout="wide")
@@ -466,3 +504,4 @@ st.download_button(
     file_name="rapport_capteurs.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
+
