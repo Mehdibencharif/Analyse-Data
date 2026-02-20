@@ -62,40 +62,46 @@ def coerce_temperature_columns(df: pd.DataFrame) -> pd.DataFrame:
 
     return df
 
-def detect_sampling_step(df: pd.DataFrame, time_col: str = "timestamp") -> dict:
+def stats_min_max_mean(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Détecte automatiquement le pas de remontée à partir des timestamps.
-    Retourne: médiane, mode (pas le plus fréquent), et un mini résumé.
+    Calcule min / max / moyenne pour chaque capteur numérique (hors timestamp/notes).
+    Retourne un DataFrame stable, même si df est vide.
     """
-    if df is None or df.empty or time_col not in df.columns:
-        return {"median": None, "mode": None, "median_min": None, "mode_min": None, "summary": None}
+    cols_out = ["Capteur", "Min", "Max", "Moyenne", "Nb valeurs", "Nb manquantes", "% présentes"]
+    if df is None or not isinstance(df, pd.DataFrame) or df.empty:
+        return pd.DataFrame(columns=cols_out)
 
-    ts = pd.to_datetime(df[time_col], errors="coerce").dropna().sort_values()
-    if len(ts) < 3:
-        return {"median": None, "mode": None, "median_min": None, "mode_min": None, "summary": None}
+    rows = []
+    total = len(df)
 
-    deltas = ts.diff().dropna()
-    deltas = deltas[deltas > pd.Timedelta(0)]  # enlève les doublons exacts
-    if deltas.empty:
-        return {"median": None, "mode": None, "median_min": None, "mode_min": None, "summary": None}
+    for col in df.columns:
+        c = str(col).lower()
+        if c in ("timestamp", "notes"):
+            continue
 
-    median_td = deltas.median()
-    mode_td = deltas.value_counts().idxmax()
+        s = series_with_true_nans(df[col])
 
-    median_min = median_td.total_seconds() / 60
-    mode_min = mode_td.total_seconds() / 60
+        # forcer en numérique (si ça ne convertit pas -> tout NaN)
+        s_num = pd.to_numeric(
+            s.astype(str).str.replace(",", ".", regex=False).str.strip(),
+            errors="coerce"
+        )
 
-    top = deltas.value_counts().head(3)
-    top_txt = ", ".join([f"{td} ({cnt})" for td, cnt in top.items()])
+        nb_val = int(s_num.notna().sum())
+        nb_nan = int(total - nb_val)
+        pct = (100.0 * nb_val / total) if total > 0 else 0.0
 
-    return {
-        "median": median_td,
-        "mode": mode_td,
-        "median_min": median_min,
-        "mode_min": mode_min,
-        "summary": top_txt
-    }
+        rows.append({
+            "Capteur": str(col),
+            "Min": float(s_num.min()) if nb_val > 0 else None,
+            "Max": float(s_num.max()) if nb_val > 0 else None,
+            "Moyenne": float(s_num.mean()) if nb_val > 0 else None,
+            "Nb valeurs": nb_val,
+            "Nb manquantes": nb_nan,
+            "% présentes": round(pct, 2),
+        })
 
+    return pd.DataFrame(rows, columns=cols_out)
 #----- Bloc 2 -------------#
 
 # ----------------------------- Streamlit : page & paramètres -----------------------------
@@ -556,39 +562,37 @@ def analyser_completude_freq(df: pd.DataFrame, frequence_str: str, rule_map: dic
 
     return pd.DataFrame(rows, columns=base_cols)
 
-
 #----- Bloc 7 -------------#
 st.subheader(f"📈 Analyse de complétude des données brutes ({frequence})")
 
+# 1) Calcul complétude
 stats_main = analyser_completude_freq(df_main_cleaned, frequence, rule_map)
 
 st.write("DEBUG type stats_main:", type(stats_main))
 st.write("DEBUG colonnes stats_main:", list(stats_main.columns) if isinstance(stats_main, pd.DataFrame) else stats_main)
 
-
-# ✅ Sécurités AVANT toute manipulation
+# 2) Sécurités AVANT manip
 if stats_main is None or not isinstance(stats_main, pd.DataFrame):
     st.error("⛔ analyser_completude_freq() n'a pas retourné un DataFrame (stats_main est None ou invalide).")
     st.stop()
 
+expected_cols = ["Capteur", "Présentes", "% Présentes", "Manquantes", "% Manquantes", "Statut"]
+missing = [c for c in expected_cols if c not in stats_main.columns]
+if missing:
+    st.error(f"⛔ Colonnes manquantes dans stats_main : {missing} | Colonnes trouvées : {list(stats_main.columns)}")
+    st.stop()
+
+# 3) Si vide : on affiche, mais on ne stop pas forcément (tu peux choisir)
 if stats_main.empty:
     st.warning("⚠️ Résultat complétude vide (aucun capteur ou aucune donnée exploitable).")
     st.dataframe(stats_main, use_container_width=True)
-    st.stop()
-
-if "Capteur" not in stats_main.columns:
-    st.error(f"⛔ Colonne 'Capteur' absente dans stats_main. Colonnes trouvées : {list(stats_main.columns)}")
-    st.stop()
-
-# Maintenant seulement, on peut manipuler
-stats_main["Capteur"] = stats_main["Capteur"].astype(str).str.strip()
-stats_main = stats_main.drop_duplicates(subset=["Capteur"], keep="last").reset_index(drop=True)
-
-st.dataframe(stats_main, use_container_width=True)
-
+else:
+    # Nettoyage capteur + dédup
+    stats_main["Capteur"] = stats_main["Capteur"].astype(str).str.strip()
+    stats_main = stats_main.drop_duplicates(subset=["Capteur"], keep="last").reset_index(drop=True)
+    st.dataframe(stats_main, use_container_width=True)
 
 # ----------------------------- Légende + Résumé -----------------------------
-
 st.markdown("""
 ### 🧾 Légende des statuts :
 - 🟢 : Capteur exploitable (≥80 % de valeurs présentes)
@@ -596,11 +600,12 @@ st.markdown("""
 - 🔴 : Données absentes (0 %)
 """)
 
-count_vert = int(stats_main["Statut"].value_counts().get("🟢", 0))
-count_orange = int(stats_main["Statut"].value_counts().get("🟠", 0))
-count_rouge = int(stats_main["Statut"].value_counts().get("🔴", 0))
+if not stats_main.empty:
+    count_vert = int(stats_main["Statut"].value_counts().get("🟢", 0))
+    count_orange = int(stats_main["Statut"].value_counts().get("🟠", 0))
+    count_rouge = int(stats_main["Statut"].value_counts().get("🔴", 0))
 
-st.markdown(f"""
+    st.markdown(f"""
 **Résumé des capteurs :**
 - Capteurs exploitables (🟢) : `{count_vert}`
 - Capteurs incomplets (🟠) : `{count_orange}`
@@ -615,35 +620,47 @@ st.caption(
 )
 
 # ----------------------------- Statistiques valeurs (min/max/moyenne) -----------------------------
-
 st.subheader("📌 Statistiques des valeurs (min / max / moyenne)")
-df_stats_values = stats_min_max_mean(df_main_cleaned)  # <- nécessite la fonction stats_min_max_mean (bloc utilitaires)
+
+try:
+    df_stats_values = stats_min_max_mean(df_main_cleaned)  # nécessite la fonction ajoutée dans le bloc utilitaires
+except Exception as e:
+    st.error(f"❌ Erreur stats_min_max_mean : {e}")
+    df_stats_values = pd.DataFrame(columns=["Capteur", "Min", "Max", "Moyenne", "Nb valeurs", "Nb manquantes", "% présentes"])
+
 st.dataframe(df_stats_values, use_container_width=True)
 
-# ----------------------------- Graphique complétude (sans seaborn, plus stable) -----------------------------
-
+# ----------------------------- Graphique complétude (barh) -----------------------------
 st.subheader("📊 Graphique — Complétude des capteurs")
 
-df_plot = stats_main.sort_values(by="% Présentes", ascending=True).copy()
+if stats_main.empty:
+    st.info("Aucun graphique : stats_main est vide.")
+else:
+    df_plot = stats_main.sort_values(by="% Présentes", ascending=True).copy()
 
-fig, ax = plt.subplots(figsize=(10, max(6, len(df_plot) * 0.25)))
-ax.barh(df_plot["Capteur"], df_plot["% Présentes"])
-ax.set_title("Complétude des capteurs")
-ax.set_xlabel("% Données présentes")
-ax.set_ylabel("Capteur")
-ax.set_xlim(0, 100)
-ax.grid(True, axis="x", alpha=0.3)
-plt.tight_layout()
-st.pyplot(fig)
+    fig, ax = plt.subplots(figsize=(10, max(6, len(df_plot) * 0.25)))
+    ax.barh(df_plot["Capteur"], df_plot["% Présentes"])
+    ax.set_title("Complétude des capteurs")
+    ax.set_xlabel("% Données présentes")
+    ax.set_ylabel("Capteur")
+    ax.set_xlim(0, 100)
+    ax.grid(True, axis="x", alpha=0.3)
+    plt.tight_layout()
+    st.pyplot(fig)
 
 # ----------------------------- Export Excel -----------------------------
-
 st.subheader("📤 Export des résultats (Excel)")
 
-# info pas de remontée (déjà calculé dans le bloc chargement)
-# step_info = detect_sampling_step(df_main, "timestamp")  # normalement déjà fait plus haut
+# ✅ Sécuriser step_info : s’il n’existe pas, on le recalcule ici
+if "step_info" not in locals() or not isinstance(step_info, dict):
+    step_info = detect_sampling_step(df_main, "timestamp")
+
+# ✅ Sécuriser df_simple : s’il n’existe pas / vide, on crée un DF minimal
+if "df_simple" not in locals() or not isinstance(df_simple, pd.DataFrame) or df_simple.empty:
+    df_simple = pd.DataFrame(columns=["Capteur", "Présentes", "% Présentes", "Manquantes", "% Manquantes", "Statut", "Nom_nettoye", "Doublon"])
 
 output = BytesIO()
+
 with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
     # Feuille 1 : résumé simple
     df_simple.to_excel(writer, index=False, sheet_name="Résumé capteurs")
@@ -651,10 +668,10 @@ with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
     # Feuille 2 : complétude brute
     stats_main.to_excel(writer, index=False, sheet_name="Complétude brute")
 
-    # ✅ Feuille 3 : stats valeurs (min/max/moyenne)
+    # Feuille 3 : stats valeurs
     df_stats_values.to_excel(writer, index=False, sheet_name="Stats valeurs")
 
-    # ✅ Feuille 4 : info pas
+    # Feuille 4 : info pas
     df_step = pd.DataFrame([{
         "Pas médian": str(step_info.get("median")),
         "Pas médian (min)": step_info.get("median_min"),
@@ -665,42 +682,46 @@ with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
     }])
     df_step.to_excel(writer, index=False, sheet_name="Info pas")
 
-    # Feuilles optionnelles si elles existent
-    if "df_non_valides" in locals() and df_non_valides is not None and not df_non_valides.empty:
+    # Feuilles optionnelles
+    if "df_non_valides" in locals() and isinstance(df_non_valides, pd.DataFrame) and not df_non_valides.empty:
         df_non_valides.to_excel(writer, index=False, sheet_name="Capteurs non reconnus")
 
-    if "df_manquants" in locals() and df_manquants is not None and not df_manquants.empty:
+    if "df_manquants" in locals() and isinstance(df_manquants, pd.DataFrame) and not df_manquants.empty:
         df_manquants.to_excel(writer, index=False, sheet_name="Capteurs manquants")
 
-    # Mise en forme conditionnelle
+    # Mise en forme conditionnelle (si colonne Statut existe)
     workbook = writer.book
     format_vert = workbook.add_format({'bg_color': '#C6EFCE', 'font_color': '#006100'})
     format_orange = workbook.add_format({'bg_color': '#FFEB9C', 'font_color': '#9C5700'})
     format_rouge = workbook.add_format({'bg_color': '#FFC7CE', 'font_color': '#9C0006'})
 
-    # Mise en forme sur "Résumé capteurs" (Statut)
     feuille = writer.sheets["Résumé capteurs"]
-    statut_col = df_simple.columns.get_loc("Statut")
 
-    # bornes lignes excel (ligne 1 = headers, donc data = 1..len)
-    last_row = len(df_simple)
+    if "Statut" in df_simple.columns:
+        statut_col = df_simple.columns.get_loc("Statut")
+        last_row = max(1, len(df_simple))  # évite 0
 
-    feuille.conditional_format(1, statut_col, last_row, statut_col, {
-        'type': 'text', 'criteria': 'containing', 'value': '🟢', 'format': format_vert
-    })
-    feuille.conditional_format(1, statut_col, last_row, statut_col, {
-        'type': 'text', 'criteria': 'containing', 'value': '🟠', 'format': format_orange
-    })
-    feuille.conditional_format(1, statut_col, last_row, statut_col, {
-        'type': 'text', 'criteria': 'containing', 'value': '🔴', 'format': format_rouge
-    })
+        feuille.conditional_format(1, statut_col, last_row, statut_col, {
+            'type': 'text', 'criteria': 'containing', 'value': '🟢', 'format': format_vert
+        })
+        feuille.conditional_format(1, statut_col, last_row, statut_col, {
+            'type': 'text', 'criteria': 'containing', 'value': '🟠', 'format': format_orange
+        })
+        feuille.conditional_format(1, statut_col, last_row, statut_col, {
+            'type': 'text', 'criteria': 'containing', 'value': '🔴', 'format': format_rouge
+        })
+
+output.seek(0)
 
 st.download_button(
     label="📥 Télécharger le rapport Excel",
-    data=output.getvalue(),
+    data=output,
     file_name="rapport_capteurs.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
+
+
+
 
 
 
