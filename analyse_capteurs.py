@@ -191,6 +191,8 @@ df_main = filtrer_periode(df_main)
 if not df_main.empty:
     st.sidebar.caption(f"Période détectée : {df_main['timestamp'].min()} → {df_main['timestamp'].max()}")
 
+
+
 # ----------------------------- Nettoyage noms (comparaison) -----------------------------
 
 def nettoyer_nom_capteur(nom: str) -> str:
@@ -504,4 +506,5 @@ st.download_button(
     file_name="rapport_capteurs.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
+
 
