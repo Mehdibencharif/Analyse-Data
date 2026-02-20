@@ -502,7 +502,14 @@ def analyser_completude_freq(df: pd.DataFrame, frequence_str: str, rule_map: dic
     - Sinon : on regroupe par bins et un bin est "présent" s'il y a AU MOINS UNE valeur dans le bin.
     """
     if df is None or df.empty:
-        return pd.DataFrame(columns=["Capteur", "Présentes",]()
+return pd.DataFrame(columns=[
+    "Capteur",
+    "Présentes",
+    "% Présentes",
+    "Manquantes",
+    "% Manquantes",
+    "Statut"
+])
 
 #----- Bloc 7 -------------#
 # ----------------------------- Analyse de complétude (fiable) -----------------------------
@@ -632,6 +639,7 @@ st.download_button(
     file_name="rapport_capteurs.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
+
 
 
 
