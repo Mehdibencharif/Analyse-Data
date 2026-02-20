@@ -508,18 +508,30 @@ def analyser_completude_freq(df: pd.DataFrame, frequence_str: str, rule_map: dic
 
 
 #----- Bloc 7 -------------#
-# ----------------------------- Analyse de complétude (fiable) -----------------------------
-
 st.subheader(f"📈 Analyse de complétude des données brutes ({frequence})")
 
-# ✅ Pour la complétude, on analyse df_main (données brutes) MAIS on garde les noms nettoyés
 stats_main = analyser_completude_freq(df_main_cleaned, frequence, rule_map)
 
-# Déduplication d'affichage (sécurité)
+# ✅ Sécurités AVANT toute manipulation
+if stats_main is None or not isinstance(stats_main, pd.DataFrame):
+    st.error("⛔ analyser_completude_freq() n'a pas retourné un DataFrame (stats_main est None ou invalide).")
+    st.stop()
+
+if stats_main.empty:
+    st.warning("⚠️ Résultat complétude vide (aucun capteur ou aucune donnée exploitable).")
+    st.dataframe(stats_main, use_container_width=True)
+    st.stop()
+
+if "Capteur" not in stats_main.columns:
+    st.error(f"⛔ Colonne 'Capteur' absente dans stats_main. Colonnes trouvées : {list(stats_main.columns)}")
+    st.stop()
+
+# Maintenant seulement, on peut manipuler
 stats_main["Capteur"] = stats_main["Capteur"].astype(str).str.strip()
 stats_main = stats_main.drop_duplicates(subset=["Capteur"], keep="last").reset_index(drop=True)
 
 st.dataframe(stats_main, use_container_width=True)
+
 
 # ----------------------------- Légende + Résumé -----------------------------
 
@@ -635,6 +647,7 @@ st.download_button(
     file_name="rapport_capteurs.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
+
 
 
 
