@@ -597,7 +597,14 @@ st.subheader(f"📈 Analyse de complétude des données brutes ({frequence})")
 stats_main = analyser_completude_freq(df_main_cleaned, frequence, rule_map)
 
 st.write("DEBUG type stats_main:", type(stats_main))
-st.write("DEBUG colonnes stats_main:", list(stats_main.columns) if isinstance(stats_main, pd.DataFrame) else stats_main)
+st.write("DEBUG stats_main est DataFrame ?", isinstance(stats_main, pd.DataFrame))
+if isinstance(stats_main, pd.DataFrame):
+    st.write("DEBUG shape:", stats_main.shape)
+    st.write("DEBUG colonnes:", list(stats_main.columns))
+    st.dataframe(stats_main.head(20), use_container_width=True)
+else:
+    st.write("DEBUG valeur brute stats_main:", stats_main)
+
 
 # 2) Sécurités AVANT manip
 if stats_main is None or not isinstance(stats_main, pd.DataFrame):
@@ -747,6 +754,7 @@ st.download_button(
     file_name="rapport_capteurs.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
+
 
 
 
