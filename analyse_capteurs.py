@@ -65,9 +65,10 @@ st.title("📊 Analyse de données ")
 st.sidebar.header("Paramètres d'analyse")
 frequence = st.sidebar.selectbox(
     "Choisissez la fréquence d'analyse :",
-    ["1min", "5min", "10min", "15min", "1H"]
+    ["1min", "2min", "5min", "10min", "15min", "1H"]
 )
 rule_map = {
+    "2min": "2min",
     "1min": "1min",
     "5min": "5min",
     "10min": "10min",
@@ -466,3 +467,4 @@ st.download_button(
     file_name="rapport_capteurs.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
+
