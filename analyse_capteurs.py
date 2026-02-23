@@ -362,6 +362,65 @@ else:
 #----- Bloc 5 -------------#
 # ----------------------------- Analyse simple -----------------------------
 
+import numpy as np
+import pandas as pd
+import streamlit as st
+
+def series_with_true_nans(x, index=None) -> pd.Series:
+    """
+    Rend une Series propre:
+    - accepte Series ou DataFrame (ex: colonnes dupliquées)
+    - convertit placeholders texte en vrais NaN
+    - garantit une Series de longueur égale à len(index) si index fourni
+    """
+
+    # 1) Convertir DataFrame -> Series (cas colonnes dupliquées)
+    if isinstance(x, pd.DataFrame):
+        # Si plusieurs colonnes (doublons), on prend la 1ère colonne non entièrement NaN si possible
+        if x.shape[1] == 0:
+            s = pd.Series([np.nan] * (len(index) if index is not None else 0))
+        elif x.shape[1] == 1:
+            s = x.iloc[:, 0]
+        else:
+            # choisir une colonne "utile"
+            best_col = None
+            best_score = -1
+            for c in x.columns:
+                tmp = x[c]
+                score = tmp.notna().sum()
+                if score > best_score:
+                    best_score = score
+                    best_col = c
+            s = x[best_col]
+    elif isinstance(x, pd.Series):
+        s = x
+    else:
+        # si x est None ou autre type (liste, scalar...), on force Series
+        if x is None:
+            s = pd.Series([np.nan] * (len(index) if index is not None else 0))
+        else:
+            s = pd.Series(x)
+
+    # 2) Aligner la longueur sur l'index attendu (évite total - présente incohérent)
+    if index is not None:
+        s = pd.Series(s.values, index=index)
+
+    # 3) Nettoyage placeholders -> NaN
+    if pd.api.types.is_object_dtype(s) or pd.api.types.is_string_dtype(s):
+        s = s.astype(str).str.strip()
+        s = s.replace({
+            "": np.nan,
+            "nan": np.nan, "NaN": np.nan,
+            "none": np.nan, "None": np.nan,
+            "null": np.nan, "NULL": np.nan,
+            "n/a": np.nan, "N/A": np.nan,
+            "na": np.nan, "NA": np.nan,
+            "-": np.nan
+        })
+
+    return s
+
+
 def analyse_simplifiee(df: pd.DataFrame) -> pd.DataFrame:
     st.subheader("Présentes vs Manquantes – Méthode simple")
 
@@ -382,21 +441,17 @@ def analyse_simplifiee(df: pd.DataFrame) -> pd.DataFrame:
         if col_str.lower() in ("timestamp", "notes"):
             continue
 
-        # ✅ Récupération safe de la colonne (évite surprises)
+        # ✅ Récupération safe de la colonne
         raw = df.get(col, None)
 
-        # ✅ placeholders -> vrais NaN (fonction corrigée)
-        s = series_with_true_nans(raw)
-
-        # ✅ si jamais ce n’est toujours pas une Series (ultra rare), on force
-        if not isinstance(s, pd.Series):
-            s = pd.Series(s)
+        # ✅ placeholders -> vrais NaN + robustesse doublons + alignement index
+        s = series_with_true_nans(raw, index=df.index)
 
         presente = int(s.notna().sum())
-        manquantes = int(total - presente)
+        manquantes = int(s.isna().sum())   # 🔥 plus fiable que total - presente
 
         pct_presente = (100.0 * presente / total) if total > 0 else 0.0
-        pct_manquantes = 100.0 - pct_presente
+        pct_manquantes = (100.0 * manquantes / total) if total > 0 else 0.0
 
         statut = "🟢" if pct_presente >= 80 else ("🟠" if pct_presente > 0 else "🔴")
 
@@ -781,6 +836,7 @@ st.download_button(
     file_name="rapport_capteurs.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
+
 
 
 
