@@ -365,19 +365,32 @@ else:
 def analyse_simplifiee(df: pd.DataFrame) -> pd.DataFrame:
     st.subheader("Présentes vs Manquantes – Méthode simple")
 
+    # ✅ Sortie standardisée (colonnes toujours présentes)
+    out_cols = ["Capteur", "Présentes", "% Présentes", "Manquantes", "% Manquantes", "Statut", "Nom_nettoye"]
+
     if df is None or df.empty:
         st.info("Aucune donnée à analyser.")
-        return pd.DataFrame(columns=["Capteur", "Présentes", "% Présentes", "Manquantes", "% Manquantes", "Statut", "Nom_nettoye"])
+        df_out = pd.DataFrame(columns=out_cols)
+        st.dataframe(df_out, use_container_width=True)
+        return df_out
 
-    total = len(df)
+    total = int(len(df))
     resume = []
 
     for col in df.columns:
-        if str(col).lower() in ("timestamp", "notes"):
+        col_str = str(col).strip()
+        if col_str.lower() in ("timestamp", "notes"):
             continue
 
-        # placeholders -> vrais NaN
-        s = series_with_true_nans(df[col])
+        # ✅ Récupération safe de la colonne (évite surprises)
+        raw = df.get(col, None)
+
+        # ✅ placeholders -> vrais NaN (fonction corrigée)
+        s = series_with_true_nans(raw)
+
+        # ✅ si jamais ce n’est toujours pas une Series (ultra rare), on force
+        if not isinstance(s, pd.Series):
+            s = pd.Series(s)
 
         presente = int(s.notna().sum())
         manquantes = int(total - presente)
@@ -388,70 +401,78 @@ def analyse_simplifiee(df: pd.DataFrame) -> pd.DataFrame:
         statut = "🟢" if pct_presente >= 80 else ("🟠" if pct_presente > 0 else "🔴")
 
         resume.append({
-            "Capteur": str(col).strip(),
+            "Capteur": col_str,
             "Présentes": presente,
             "% Présentes": round(pct_presente, 2),
             "Manquantes": manquantes,
             "% Manquantes": round(pct_manquantes, 2),
-            "Statut": statut
+            "Statut": statut,
         })
 
     df_resume = pd.DataFrame(resume)
 
-    # nom nettoyé (sert pour doublons + comparaison)
+    # ✅ garantir colonnes attendues même si resume est vide (ex: seulement timestamp)
+    for c in out_cols:
+        if c not in df_resume.columns:
+            df_resume[c] = pd.Series(dtype="object")
+
+    # ✅ Nom nettoyé (sert pour doublons + comparaison)
     df_resume["Nom_nettoye"] = df_resume["Capteur"].astype(str).apply(nettoyer_nom_capteur)
 
-    st.dataframe(df_resume, use_container_width=True)
-    return df_resume
+    st.dataframe(df_resume[out_cols], use_container_width=True)
+    return df_resume[out_cols]
+
 
 # ✅ Utiliser df_main_cleaned pour être cohérent avec les noms nettoyés
 df_simple = analyse_simplifiee(df_main_cleaned)
 
 # ----------------------------- Doublons (basé sur nom nettoyé) -----------------------------
+if df_simple is None or df_simple.empty:
+    st.warning("Aucun capteur à vérifier (doublons/référence).")
+else:
+    df_simple["Doublon"] = df_simple["Nom_nettoye"].duplicated(keep=False).map({True: "🔁 Oui", False: "✅ Non"})
+    # ✅ on garde 1 ligne par capteur (nom nettoyé), en gardant la dernière occurrence
+    df_simple = df_simple.drop_duplicates(subset=["Nom_nettoye"], keep="last").reset_index(drop=True)
 
-df_simple["Doublon"] = df_simple["Nom_nettoye"].duplicated(keep=False).map({True: "🔁 Oui", False: "✅ Non"})
-df_simple = df_simple.drop_duplicates(subset=["Nom_nettoye"], keep="last").reset_index(drop=True)
+    # ----------------------------- Validation vs référence (si fournie) -----------------------------
+    df_valides = pd.DataFrame()
+    df_non_valides = pd.DataFrame()
+    df_manquants = pd.DataFrame()
 
-# ----------------------------- Validation vs référence (si fournie) -----------------------------
+    if isinstance(capteurs_reference_cleaned, set) and len(capteurs_reference_cleaned) > 0:
+        df_simple["Dans la référence"] = df_simple["Nom_nettoye"].isin(capteurs_reference_cleaned).map(
+            {True: "✅ Oui", False: "❌ Non"}
+        )
 
-df_valides = pd.DataFrame()
-df_non_valides = pd.DataFrame()
-df_manquants = pd.DataFrame()
+        # ✅ Trier : capteurs reconnus en haut
+        df_simple = df_simple.sort_values(by="Dans la référence", ascending=False).reset_index(drop=True)
 
-if isinstance(capteurs_reference_cleaned, set) and len(capteurs_reference_cleaned) > 0:
-    df_simple["Dans la référence"] = df_simple["Nom_nettoye"].isin(capteurs_reference_cleaned).map(
-        {True: "✅ Oui", False: "❌ Non"}
-    )
+        st.subheader("✅ Capteurs trouvés dans la référence")
+        df_valides = df_simple[df_simple["Dans la référence"] == "✅ Oui"]
+        if not df_valides.empty:
+            st.dataframe(df_valides[["Capteur", "Dans la référence", "Doublon"]], use_container_width=True)
+        else:
+            st.write("Aucun capteur valide trouvé.")
 
-    # trier: capteurs reconnus en haut
-    df_simple = df_simple.sort_values(by="Dans la référence", ascending=False).reset_index(drop=True)
+        st.subheader("❌ Capteurs absents de la référence")
+        df_non_valides = df_simple[df_simple["Dans la référence"] == "❌ Non"]
+        if not df_non_valides.empty:
+            st.dataframe(df_non_valides[["Capteur", "Dans la référence", "Doublon"]], use_container_width=True)
+            st.subheader("Liste brute – Capteurs absents de la référence")
+            st.write(df_non_valides["Capteur"].tolist())
+        else:
+            st.write("Tous les capteurs sont présents dans la référence.")
 
-    st.subheader("✅ Capteurs trouvés dans la référence")
-    df_valides = df_simple[df_simple["Dans la référence"] == "✅ Oui"]
-    if not df_valides.empty:
-        st.dataframe(df_valides[["Capteur", "Dans la référence", "Doublon"]], use_container_width=True)
-    else:
-        st.write("Aucun capteur valide trouvé.")
+        # ✅ Capteurs attendus mais absents des données
+        capteurs_trouves = set(df_simple["Nom_nettoye"].dropna().tolist())
+        manquants = sorted(capteurs_reference_cleaned - capteurs_trouves)
 
-    st.subheader("❌ Capteurs absents de la référence")
-    df_non_valides = df_simple[df_simple["Dans la référence"] == "❌ Non"]
-    if not df_non_valides.empty:
-        st.dataframe(df_non_valides[["Capteur", "Dans la référence", "Doublon"]], use_container_width=True)
-        st.subheader("Liste brute – Capteurs absents de la référence")
-        st.write(df_non_valides["Capteur"].tolist())
-    else:
-        st.write("Tous les capteurs sont présents dans la référence.")
-
-    # capteurs attendus mais absents des données
-    capteurs_trouves = set(df_simple["Nom_nettoye"].dropna().tolist())
-    manquants = sorted(capteurs_reference_cleaned - capteurs_trouves)
-
-    if manquants:
-        st.subheader("Capteurs attendus non trouvés dans les données analysées")
-        df_manquants = pd.DataFrame(manquants, columns=["Capteur (référence manquant dans les données)"])
-        st.dataframe(df_manquants, use_container_width=True)
-    else:
-        st.write("✅ Tous les capteurs attendus sont présents dans les données.")
+        if manquants:
+            st.subheader("Capteurs attendus non trouvés dans les données analysées")
+            df_manquants = pd.DataFrame(manquants, columns=["Capteur (référence manquant dans les données)"])
+            st.dataframe(df_manquants, use_container_width=True)
+        else:
+            st.write("✅ Tous les capteurs attendus sont présents dans les données.")
 
 #----- Bloc 6 -------------#
 # ----------------------------- Resample (utile pour d'autres vues, pas pour la complétude) -----------------------------
@@ -760,6 +781,7 @@ st.download_button(
     file_name="rapport_capteurs.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
+
 
 
 
