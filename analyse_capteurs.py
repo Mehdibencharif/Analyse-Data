@@ -562,42 +562,42 @@ st.pyplot(fig)
 
 # ----------------------------- 🆕 Graphique : distribution des moyennes -----------------------------
 
-st.subheader("📊 Valeurs moyennes par capteur")
+#st.subheader("📊 Valeurs moyennes par capteur")
 
-st.caption(
-    "Ce graphique montre la **valeur moyenne mesurée** par chaque capteur sur toute la période analysée. "
-    "La barre représente la moyenne (ex: 42 kW en moyenne pour un compresseur). "
-    "Les petites lignes noires aux extrémités (barres d'erreur) indiquent l'écart-type : "
-    "plus elles sont longues, plus la valeur oscille beaucoup autour de la moyenne. "
-    "La couleur suit le statut de complétude (🟢 bleu = données fiables, 🟠 orange = données incomplètes, 🔴 rouge = absent)."
-)
+#st.caption(
+   # "Ce graphique montre la **valeur moyenne mesurée** par chaque capteur sur toute la période analysée. "
+   # "La barre représente la moyenne (ex: 42 kW en moyenne pour un compresseur). "
+  #  "Les petites lignes noires aux extrémités (barres d'erreur) indiquent l'écart-type : "
+ #   "plus elles sont longues, plus la valeur oscille beaucoup autour de la moyenne. "
+ #   "La couleur suit le statut de complétude (🟢 bleu = données fiables, 🟠 orange = données incomplètes, 🔴 rouge = absent)."
+#)
 
-df_moy = df_stats_merged.dropna(subset=["Moyenne"]).sort_values("Moyenne", ascending=True)
+#df_moy = df_stats_merged.dropna(subset=["Moyenne"]).sort_values("Moyenne", ascending=True)
 
-if not df_moy.empty:
-    fig2, ax2 = plt.subplots(figsize=(10, max(6, len(df_moy) * 0.25)))
-    palette_moy = {"🟢": "steelblue", "🟠": "orange", "🔴": "red"}
-    couleurs = [palette_moy.get(s, "gray") for s in df_moy["Statut"]]
-    ax2.barh(df_moy["Capteur"], df_moy["Moyenne"], color=couleurs)
-    ax2.errorbar(
-        df_moy["Moyenne"],
-        range(len(df_moy)),
-        xerr=df_moy["Écart-type"].fillna(0),
-        fmt="none",
-        color="black",
-        alpha=0.5,
-        linewidth=1,
-        capsize=3,
-        label="± Écart-type"
-    )
-    ax2.set_xlabel("Valeur moyenne (unité selon le capteur)")
-    ax2.set_ylabel("Capteur")
-    ax2.set_title("Valeur moyenne par capteur (barres d'erreur = ±1 écart-type)")
-    ax2.legend()
-    plt.tight_layout()
-    st.pyplot(fig2)
-else:
-    st.info("Aucune colonne numérique disponible pour ce graphique.")
+#if not df_moy.empty:
+ #   fig2, ax2 = plt.subplots(figsize=(10, max(6, len(df_moy) * 0.25)))
+ #   palette_moy = {"🟢": "steelblue", "🟠": "orange", "🔴": "red"}
+ #   couleurs = [palette_moy.get(s, "gray") for s in df_moy["Statut"]]
+ #   ax2.barh(df_moy["Capteur"], df_moy["Moyenne"], color=couleurs)
+ #   ax2.errorbar(
+ #       df_moy["Moyenne"],
+ #       range(len(df_moy)),
+ #       xerr=df_moy["Écart-type"].fillna(0),
+ #       fmt="none",
+ #       color="black",
+ #       alpha=0.5,
+ #      linewidth=1,
+ #       capsize=3,
+  #      label="± Écart-type"
+  #  )
+  #  ax2.set_xlabel("Valeur moyenne (unité selon le capteur)")
+  #  ax2.set_ylabel("Capteur")
+  #  ax2.set_title("Valeur moyenne par capteur (barres d'erreur = ±1 écart-type)")
+  #  ax2.legend()
+  #  plt.tight_layout()
+  #  st.pyplot(fig2)
+#else:
+  #  st.info("Aucune colonne numérique disponible pour ce graphique.")
 
 
 
