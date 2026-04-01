@@ -1,24 +1,13 @@
 import streamlit as st
-
 import pandas as pd
-
 import matplotlib.pyplot as plt
-
 import seaborn as sns
-
 from io import BytesIO
-
 from datetime import timedelta
-
 import re
-
 import hashlib
-
 import unicodedata
-
 from pandas.api.types import is_numeric_dtype
-
-
 
 # ----------------------------- Utilitaires "qualité data" -----------------------------
 
@@ -494,7 +483,10 @@ def colorier_statut(val):
         return "background-color: #FFC7CE; color: #9C0006"
     return ""
 
-styled = df_stats_merged.style.applymap(colorier_statut, subset=["Statut"])
+try:
+    styled = df_stats_merged.style.map(colorier_statut, subset=["Statut"])
+except AttributeError:
+    styled = df_stats_merged.style.applymap(colorier_statut, subset=["Statut"])
 st.dataframe(styled, use_container_width=True)
 
 # Petit résumé rapide sous le tableau
