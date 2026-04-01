@@ -9,6 +9,8 @@ import hashlib
 import unicodedata
 from pandas.api.types import is_numeric_dtype
 
+
+
 # ----------------------------- Utilitaires "qualité data" -----------------------------
 
 
@@ -560,7 +562,15 @@ st.pyplot(fig)
 
 # ----------------------------- 🆕 Graphique : distribution des moyennes -----------------------------
 
-st.subheader("📊 Distribution des moyennes par capteur")
+st.subheader("📊 Valeurs moyennes par capteur")
+
+st.caption(
+    "Ce graphique montre la **valeur moyenne mesurée** par chaque capteur sur toute la période analysée. "
+    "La barre représente la moyenne (ex: 42 kW en moyenne pour un compresseur). "
+    "Les petites lignes noires aux extrémités (barres d'erreur) indiquent l'écart-type : "
+    "plus elles sont longues, plus la valeur oscille beaucoup autour de la moyenne. "
+    "La couleur suit le statut de complétude (🟢 bleu = données fiables, 🟠 orange = données incomplètes, 🔴 rouge = absent)."
+)
 
 df_moy = df_stats_merged.dropna(subset=["Moyenne"]).sort_values("Moyenne", ascending=True)
 
@@ -568,9 +578,7 @@ if not df_moy.empty:
     fig2, ax2 = plt.subplots(figsize=(10, max(6, len(df_moy) * 0.25)))
     palette_moy = {"🟢": "steelblue", "🟠": "orange", "🔴": "red"}
     couleurs = [palette_moy.get(s, "gray") for s in df_moy["Statut"]]
-    bars = ax2.barh(df_moy["Capteur"], df_moy["Moyenne"], color=couleurs)
-
-    # Ajout des barres d'erreur (écart-type)
+    ax2.barh(df_moy["Capteur"], df_moy["Moyenne"], color=couleurs)
     ax2.errorbar(
         df_moy["Moyenne"],
         range(len(df_moy)),
@@ -582,10 +590,9 @@ if not df_moy.empty:
         capsize=3,
         label="± Écart-type"
     )
-
-    ax2.set_xlabel("Valeur moyenne")
+    ax2.set_xlabel("Valeur moyenne (unité selon le capteur)")
     ax2.set_ylabel("Capteur")
-    ax2.set_title("Moyennes des capteurs (barres d'erreur = ±1 écart-type)")
+    ax2.set_title("Valeur moyenne par capteur (barres d'erreur = ±1 écart-type)")
     ax2.legend()
     plt.tight_layout()
     st.pyplot(fig2)
@@ -594,69 +601,251 @@ else:
 
 
 
-# ----------------------------- Export Excel -----------------------------
+# ----------------------------- Export Excel (style rapport de référence) -----------------------------
 
 
+
+import openpyxl
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.utils import get_column_letter
+
+
+
+def _border_thin():
+    s = Side(style="thin", color="BFBFBF")
+    return Border(left=s, right=s, top=s, bottom=s)
+
+def _border_medium_bottom():
+    thin = Side(style="thin", color="BFBFBF")
+    med  = Side(style="medium", color="1F4E79")
+    return Border(left=thin, right=thin, top=thin, bottom=med)
+
+
+# Palettes couleurs identiques au rapport de référence
+COLOR_TITRE_BG    = "0D1F3C"   # bleu très foncé  — ligne titre principale
+COLOR_SOUS_BG     = "2E4057"   # bleu foncé        — ligne sous-titre
+COLOR_SECTION_BG  = "1F3864"   # bleu section      — séparateur de groupe
+COLOR_HEADER_BG   = "1F4E79"   # bleu en-têtes colonnes
+COLOR_WHITE       = "FFFFFF"
+COLOR_ROW_EVEN    = "F2F2F2"   # gris très clair
+COLOR_ROW_ODD     = "FFFFFF"   # blanc
+COLOR_VERT_BG     = "C6EFCE";  COLOR_VERT_FG    = "006100"
+COLOR_ORANGE_BG   = "FFC000";  COLOR_ORANGE_FG  = "7F4800"
+COLOR_ROUGE_BG    = "FFC7CE";  COLOR_ROUGE_FG   = "9C0006"
+
+FONT_NAME = "Arial"
+
+
+def style_titre(ws, row, text, n_cols, bg=COLOR_TITRE_BG, size=14):
+    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=n_cols)
+    cell = ws.cell(row=row, column=1, value=text)
+    cell.font = Font(name=FONT_NAME, bold=True, size=size, color=COLOR_WHITE)
+    cell.fill = PatternFill("solid", fgColor=bg)
+    cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=False)
+    ws.row_dimensions[row].height = 22
+
+
+def style_sous_titre(ws, row, text, n_cols):
+    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=n_cols)
+    cell = ws.cell(row=row, column=1, value=text)
+    cell.font = Font(name=FONT_NAME, size=10, color=COLOR_WHITE)
+    cell.fill = PatternFill("solid", fgColor=COLOR_SOUS_BG)
+    cell.alignment = Alignment(horizontal="left", vertical="center")
+    ws.row_dimensions[row].height = 16
+
+
+def style_section(ws, row, text, n_cols):
+    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=n_cols)
+    cell = ws.cell(row=row, column=1, value=text)
+    cell.font = Font(name=FONT_NAME, bold=True, size=11, color=COLOR_WHITE)
+    cell.fill = PatternFill("solid", fgColor=COLOR_SECTION_BG)
+    cell.alignment = Alignment(horizontal="left", vertical="center")
+    ws.row_dimensions[row].height = 18
+
+
+def style_headers(ws, row, headers):
+    for col_idx, h in enumerate(headers, start=1):
+        cell = ws.cell(row=row, column=col_idx, value=h)
+        cell.font = Font(name=FONT_NAME, bold=True, size=10, color=COLOR_WHITE)
+        cell.fill = PatternFill("solid", fgColor=COLOR_HEADER_BG)
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        cell.border = _border_medium_bottom()
+    ws.row_dimensions[row].height = 30
+
+
+def style_data_row(ws, row_idx, data_row, statut_col_idx=None):
+    """Écrit une ligne de données avec alternance de couleurs + colorisation statut."""
+    is_even = (row_idx % 2 == 0)
+    base_bg = COLOR_ROW_EVEN if is_even else COLOR_ROW_ODD
+
+    for col_idx, val in enumerate(data_row, start=1):
+        cell = ws.cell(row=row_idx, column=col_idx, value=val)
+        cell.font = Font(name=FONT_NAME, size=10)
+        cell.border = _border_thin()
+
+        # Colorisation spéciale colonne Statut
+        if statut_col_idx and col_idx == statut_col_idx:
+            if val == "🟢":
+                cell.fill = PatternFill("solid", fgColor=COLOR_VERT_BG)
+                cell.font = Font(name=FONT_NAME, size=10, color=COLOR_VERT_FG, bold=True)
+            elif val == "🟠":
+                cell.fill = PatternFill("solid", fgColor=COLOR_ORANGE_BG)
+                cell.font = Font(name=FONT_NAME, size=10, color=COLOR_ORANGE_FG, bold=True)
+            elif val == "🔴":
+                cell.fill = PatternFill("solid", fgColor=COLOR_ROUGE_BG)
+                cell.font = Font(name=FONT_NAME, size=10, color=COLOR_ROUGE_FG, bold=True)
+            else:
+                cell.fill = PatternFill("solid", fgColor=base_bg)
+        else:
+            cell.fill = PatternFill("solid", fgColor=base_bg)
+
+        cell.alignment = Alignment(horizontal="left" if col_idx == 1 else "center", vertical="center", wrap_text=False)
+
+
+def auto_col_width(ws, col_idx, df_col_values, header, min_w=10, max_w=60):
+    max_len = max(len(str(header)), max(
+        (len(str(v)) for v in df_col_values if v is not None), default=0
+    ))
+    ws.column_dimensions[get_column_letter(col_idx)].width = min(max(max_len + 2, min_w), max_w)
+
+
+def ecrire_feuille_style(wb, sheet_name, titre, sous_titre, df, statut_col_name=None, section_label=None):
+    """Crée une feuille formatée dans le style du rapport de référence."""
+    ws = wb.create_sheet(title=sheet_name)
+    n_cols = len(df.columns)
+    current_row = 1
+
+    # Titre + sous-titre
+    style_titre(ws, current_row, titre, n_cols)
+    current_row += 1
+    style_sous_titre(ws, current_row, sous_titre, n_cols)
+    current_row += 1
+
+    # Ligne vide
+    current_row += 1
+
+    # Section optionnelle
+    if section_label:
+        style_section(ws, current_row, section_label, n_cols)
+        current_row += 1
+
+    # En-têtes colonnes
+    headers = list(df.columns)
+    style_headers(ws, current_row, headers)
+    header_row = current_row
+    current_row += 1
+
+    # Trouver l'index de la colonne Statut (1-based)
+    statut_col_idx = None
+    if statut_col_name and statut_col_name in df.columns:
+        statut_col_idx = df.columns.get_loc(statut_col_name) + 1
+
+    # Données
+    for _, row_data in df.iterrows():
+        style_data_row(ws, current_row, list(row_data), statut_col_idx=statut_col_idx)
+        current_row += 1
+
+    # Largeur des colonnes
+    for col_idx, col_name in enumerate(df.columns, start=1):
+        auto_col_width(ws, col_idx, df[col_name].tolist(), col_name)
+
+    # Figer la ligne d'en-têtes
+    ws.freeze_panes = ws.cell(row=header_row + 1, column=1)
+
+    return ws
+
+
+def generer_rapport_excel(df_simple, stats_main, df_stats_merged,
+                           df_non_valides=None, df_manquants=None,
+                           periode="", frequence=""):
+    wb = Workbook()
+    # Supprimer la feuille par défaut
+    wb.remove(wb.active)
+
+    sous_titre_base = f"Période : {periode}  |  Fréquence : {frequence}"
+
+    # --- Feuille 1 : Complétude brute ---
+    ecrire_feuille_style(
+        wb,
+        sheet_name="Complétude brute",
+        titre="RAPPORT D'ANALYSE — COMPLÉTUDE DES CAPTEURS",
+        sous_titre=sous_titre_base,
+        df=stats_main,
+        statut_col_name="Statut",
+        section_label="📈  ANALYSE DE COMPLÉTUDE — Données brutes"
+    )
+
+    # --- Feuille 2 : Stats descriptives ---
+    ecrire_feuille_style(
+        wb,
+        sheet_name="Stats descriptives",
+        titre="RAPPORT D'ANALYSE — STATISTIQUES DESCRIPTIVES",
+        sous_titre=sous_titre_base,
+        df=df_stats_merged,
+        statut_col_name="Statut",
+        section_label="📐  MIN / MAX / MOYENNE / MÉDIANE / ÉCART-TYPE par capteur"
+    )
+
+    # --- Feuille 3 : Résumé capteurs ---
+    ecrire_feuille_style(
+        wb,
+        sheet_name="Résumé capteurs",
+        titre="RÉSUMÉ DES CAPTEURS",
+        sous_titre=sous_titre_base,
+        df=df_simple,
+        statut_col_name="Statut",
+        section_label="📋  DISPONIBILITÉ COMPLÈTE DES DONNÉES PAR CAPTEUR"
+    )
+
+    # --- Feuille 4 : Capteurs non reconnus (facultatif) ---
+    if df_non_valides is not None and not df_non_valides.empty:
+        ecrire_feuille_style(
+            wb,
+            sheet_name="Capteurs non reconnus",
+            titre="CAPTEURS ABSENTS DE LA RÉFÉRENCE",
+            sous_titre=sous_titre_base,
+            df=df_non_valides,
+            statut_col_name="Dans la référence"
+        )
+
+    # --- Feuille 5 : Capteurs manquants (facultatif) ---
+    if df_manquants is not None and not df_manquants.empty:
+        ecrire_feuille_style(
+            wb,
+            sheet_name="Capteurs manquants",
+            titre="CAPTEURS ATTENDUS NON TROUVÉS",
+            sous_titre=sous_titre_base,
+            df=df_manquants
+        )
+
+    buf = BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf.getvalue()
+
+
+# --- Génération et bouton téléchargement ---
 
 st.subheader("📤 Export des résultats (Excel)")
 
-output = BytesIO()
-with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-    # Feuille 1 : résumé simple
-    df_simple.to_excel(writer, index=False, sheet_name="Résumé capteurs")
-    # Feuille 2 : complétude brute
-    stats_main.to_excel(writer, index=False, sheet_name="Complétude brute")
-    # Feuille 3 : 🆕 statistiques descriptives
-    df_stats_merged.to_excel(writer, index=False, sheet_name="Stats descriptives")
+periode_str = ""
+if not df_main.empty:
+    periode_str = f"{df_main['timestamp'].min().strftime('%d %b %Y')} – {df_main['timestamp'].max().strftime('%d %b %Y')}"
 
-    if 'df_non_valides' in locals() and df_non_valides is not None and not df_non_valides.empty:
-        df_non_valides.to_excel(writer, index=False, sheet_name="Capteurs non reconnus")
-
-    if 'df_manquants' in locals() and df_manquants is not None and not df_manquants.empty:
-        df_manquants.to_excel(writer, index=False, sheet_name="Capteurs manquants")
-
-    workbook  = writer.book
-    format_vert   = workbook.add_format({'bg_color': '#C6EFCE', 'font_color': '#006100'})
-    format_orange = workbook.add_format({'bg_color': '#FFEB9C', 'font_color': '#9C5700'})
-    format_rouge  = workbook.add_format({'bg_color': '#FFC7CE', 'font_color': '#9C0006'})
-
-    # Mise en forme sur "Résumé capteurs"
-    feuille = writer.sheets["Résumé capteurs"]
-    statut_col = df_simple.columns.get_loc("Statut")
-    feuille.conditional_format(1, statut_col, len(df_simple), statut_col, {
-        'type': 'text', 'criteria': 'containing', 'value': '🟢', 'format': format_vert
-    })
-    feuille.conditional_format(1, statut_col, len(df_simple), statut_col, {
-        'type': 'text', 'criteria': 'containing', 'value': '🟠', 'format': format_orange
-    })
-    feuille.conditional_format(1, statut_col, len(df_simple), statut_col, {
-        'type': 'text', 'criteria': 'containing', 'value': '🔴', 'format': format_rouge
-    })
-
-    # Mise en forme sur "Stats descriptives"
-    feuille_stats = writer.sheets["Stats descriptives"]
-    if "Statut" in df_stats_merged.columns:
-        statut_col_stats = df_stats_merged.columns.get_loc("Statut")
-        feuille_stats.conditional_format(1, statut_col_stats, len(df_stats_merged), statut_col_stats, {
-            'type': 'text', 'criteria': 'containing', 'value': '🟢', 'format': format_vert
-        })
-        feuille_stats.conditional_format(1, statut_col_stats, len(df_stats_merged), statut_col_stats, {
-            'type': 'text', 'criteria': 'containing', 'value': '🟠', 'format': format_orange
-        })
-        feuille_stats.conditional_format(1, statut_col_stats, len(df_stats_merged), statut_col_stats, {
-            'type': 'text', 'criteria': 'containing', 'value': '🔴', 'format': format_rouge
-        })
-
-    # Auto-largeur colonnes stats descriptives
-    for i, col_name in enumerate(df_stats_merged.columns):
-        col_len = max(len(str(col_name)), 10)
-        feuille_stats.set_column(i, i, col_len + 4)
-
-
+rapport_bytes = generer_rapport_excel(
+    df_simple=df_simple,
+    stats_main=stats_main,
+    df_stats_merged=df_stats_merged,
+    df_non_valides=df_non_valides if 'df_non_valides' in locals() else None,
+    df_manquants=df_manquants if 'df_manquants' in locals() else None,
+    periode=periode_str,
+    frequence=frequence
+)
 
 st.download_button(
     label="📥 Télécharger le rapport Excel",
-    data=output.getvalue(),
+    data=rapport_bytes,
     file_name="rapport_capteurs.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
