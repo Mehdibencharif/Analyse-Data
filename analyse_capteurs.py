@@ -121,7 +121,7 @@ rule_map = {
     "5min": "5min",
     "10min": "10min",
     "15min": "15min",
-    "1H": "1H"
+    "1H": "1h"   # pandas >= 2.2 : H dépréciée
 }
 
 
@@ -313,7 +313,11 @@ df_simple = analyse_simplifiee(df_main)
 df_simple["Capteur"] = df_simple["Capteur"].astype(str).str.strip()
 df_simple["Doublon"] = df_simple["Capteur"].duplicated(keep=False) \
     .map({True: "🔁 Oui", False: "✅ Non"})
-df_simple = df_simple.drop_duplicates(subset=["Nom_nettoye"], keep="last").reset_index(drop=True)
+# Trier par % Présentes DESC avant dédoublonnage → keep="first" garde la ligne la plus complète
+df_simple = (df_simple
+    .sort_values("% Présentes", ascending=False)
+    .drop_duplicates(subset=["Nom_nettoye"], keep="first")
+    .reset_index(drop=True))
 
 
 
@@ -449,7 +453,13 @@ def analyser_completude_freq(df: pd.DataFrame, frequence_str: str, rule_map: dic
 
 
 
-st.subheader(f"📈 Analyse de complétude des données brutes ({frequence})")
+st.subheader(f"📈 Analyse de complétude — méthode fréquence ({frequence})")
+st.caption(
+    "ℹ️ **Méthode officielle** : un intervalle est compté comme 'présent' "
+    "s'il contient au moins une valeur dans la fenêtre temporelle choisie. "
+    "Les valeurs ci-dessus (Présentes vs Manquantes – méthode simple) comptent "
+    "les lignes brutes sans tenir compte de la fréquence d'échantillonnage."
+)
 
 stats_main = analyser_completude_freq(df_main, frequence, rule_map)
 stats_main = stats_main.drop_duplicates(subset=["Capteur"], keep="last").reset_index(drop=True)
@@ -466,7 +476,12 @@ st.subheader("📐 Statistiques descriptives par capteur (Min / Max / Moyenne / 
 
 df_stats = calculer_stats_descriptives(df_main)
 df_stats["Nom_nettoye"] = df_stats["Capteur"].apply(nettoyer_nom_capteur)
-df_stats = df_stats.drop_duplicates(subset=["Nom_nettoye"], keep="last").drop(columns=["Nom_nettoye"]).reset_index(drop=True)
+# Trier par N valeurs DESC → keep="first" garde le capteur avec le plus de données
+df_stats = (df_stats
+    .sort_values("N valeurs", ascending=False)
+    .drop_duplicates(subset=["Nom_nettoye"], keep="first")
+    .drop(columns=["Nom_nettoye"])
+    .reset_index(drop=True))
 
 # Fusionner avec les statuts de complétude pour contexte
 df_stats_merged = df_stats.merge(
@@ -562,42 +577,42 @@ st.pyplot(fig)
 
 # ----------------------------- 🆕 Graphique : distribution des moyennes -----------------------------
 
-#st.subheader("📊 Valeurs moyennes par capteur")
+st.subheader("📊 Valeurs moyennes par capteur")
 
-#st.caption(
-   # "Ce graphique montre la **valeur moyenne mesurée** par chaque capteur sur toute la période analysée. "
-   # "La barre représente la moyenne (ex: 42 kW en moyenne pour un compresseur). "
-  #  "Les petites lignes noires aux extrémités (barres d'erreur) indiquent l'écart-type : "
- #   "plus elles sont longues, plus la valeur oscille beaucoup autour de la moyenne. "
- #   "La couleur suit le statut de complétude (🟢 bleu = données fiables, 🟠 orange = données incomplètes, 🔴 rouge = absent)."
-#)
+st.caption(
+    "Ce graphique montre la **valeur moyenne mesurée** par chaque capteur sur toute la période analysée. "
+    "La barre représente la moyenne (ex: 42 kW en moyenne pour un compresseur). "
+    "Les petites lignes noires aux extrémités (barres d'erreur) indiquent l'écart-type : "
+    "plus elles sont longues, plus la valeur oscille beaucoup autour de la moyenne. "
+    "La couleur suit le statut de complétude (🟢 bleu = données fiables, 🟠 orange = données incomplètes, 🔴 rouge = absent)."
+)
 
-#df_moy = df_stats_merged.dropna(subset=["Moyenne"]).sort_values("Moyenne", ascending=True)
+df_moy = df_stats_merged.dropna(subset=["Moyenne"]).sort_values("Moyenne", ascending=True)
 
-#if not df_moy.empty:
- #   fig2, ax2 = plt.subplots(figsize=(10, max(6, len(df_moy) * 0.25)))
- #   palette_moy = {"🟢": "steelblue", "🟠": "orange", "🔴": "red"}
- #   couleurs = [palette_moy.get(s, "gray") for s in df_moy["Statut"]]
- #   ax2.barh(df_moy["Capteur"], df_moy["Moyenne"], color=couleurs)
- #   ax2.errorbar(
- #       df_moy["Moyenne"],
- #       range(len(df_moy)),
- #       xerr=df_moy["Écart-type"].fillna(0),
- #       fmt="none",
- #       color="black",
- #       alpha=0.5,
- #      linewidth=1,
- #       capsize=3,
-  #      label="± Écart-type"
-  #  )
-  #  ax2.set_xlabel("Valeur moyenne (unité selon le capteur)")
-  #  ax2.set_ylabel("Capteur")
-  #  ax2.set_title("Valeur moyenne par capteur (barres d'erreur = ±1 écart-type)")
-  #  ax2.legend()
-  #  plt.tight_layout()
-  #  st.pyplot(fig2)
-#else:
-  #  st.info("Aucune colonne numérique disponible pour ce graphique.")
+if not df_moy.empty:
+    fig2, ax2 = plt.subplots(figsize=(10, max(6, len(df_moy) * 0.25)))
+    palette_moy = {"🟢": "steelblue", "🟠": "orange", "🔴": "red"}
+    couleurs = [palette_moy.get(s, "gray") for s in df_moy["Statut"]]
+    ax2.barh(df_moy["Capteur"], df_moy["Moyenne"], color=couleurs)
+    ax2.errorbar(
+        df_moy["Moyenne"],
+        range(len(df_moy)),
+        xerr=df_moy["Écart-type"].fillna(0),
+        fmt="none",
+        color="black",
+        alpha=0.5,
+        linewidth=1,
+        capsize=3,
+        label="± Écart-type"
+    )
+    ax2.set_xlabel("Valeur moyenne (unité selon le capteur)")
+    ax2.set_ylabel("Capteur")
+    ax2.set_title("Valeur moyenne par capteur (barres d'erreur = ±1 écart-type)")
+    ax2.legend()
+    plt.tight_layout()
+    st.pyplot(fig2)
+else:
+    st.info("Aucune colonne numérique disponible pour ce graphique.")
 
 
 
