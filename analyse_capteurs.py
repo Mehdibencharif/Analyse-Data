@@ -121,7 +121,7 @@ rule_map = {
     "5min": "5min",
     "10min": "10min",
     "15min": "15min",
-    "1H": "1h"   # pandas >= 2.2 : H dépréciée
+    "1H": "1h"
 }
 
 
@@ -468,19 +468,24 @@ st.dataframe(stats_main, use_container_width=True)
 
 
 
-# ----------------------------- 🆕 Statistiques descriptives -----------------------------
+# ----------------------------- Statistiques descriptives -----------------------------
 
 
 
 st.subheader("📐 Statistiques descriptives par capteur (Min / Max / Moyenne / Médiane / Écart-type)")
 
 df_stats = calculer_stats_descriptives(df_main)
-df_stats["Nom_nettoye"] = df_stats["Capteur"].apply(nettoyer_nom_capteur)
-# Trier par N valeurs DESC → keep="first" garde le capteur avec le plus de données
+
+# -----------------------------------------------------------------------
+# CORRECTION : on ne dédoublonne PAS sur Nom_nettoye ici.
+# Les noms de colonnes dans df_main sont déjà distincts ; le nettoyage
+# (suppression des crochets/parenthèses) rendait identiques des capteurs
+# légitimement différents, ex. [Minute] vs [Heure] vs [Jour] du même
+# compresseur → les variantes [Heure] et [Jour] étaient silencieusement
+# éliminées. On trie simplement par N valeurs et on conserve tout.
+# -----------------------------------------------------------------------
 df_stats = (df_stats
     .sort_values("N valeurs", ascending=False)
-    .drop_duplicates(subset=["Nom_nettoye"], keep="first")
-    .drop(columns=["Nom_nettoye"])
     .reset_index(drop=True))
 
 # Fusionner avec les statuts de complétude pour contexte
@@ -575,47 +580,6 @@ st.pyplot(fig)
 
 
 
-# ----------------------------- 🆕 Graphique : distribution des moyennes -----------------------------
-
-#st.subheader("📊 Valeurs moyennes par capteur")
-
-#st.caption(
-    #"Ce graphique montre la **valeur moyenne mesurée** par chaque capteur sur toute la période analysée. "
-    #"La barre représente la moyenne (ex: 42 kW en moyenne pour un compresseur). "
-    #"Les petites lignes noires aux extrémités (barres d'erreur) indiquent l'écart-type : "
-    #"plus elles sont longues, plus la valeur oscille beaucoup autour de la moyenne. "
-    #"La couleur suit le statut de complétude (🟢 bleu = données fiables, 🟠 orange = données incomplètes, 🔴 rouge = absent)."
-#)
-
-#df_moy = df_stats_merged.dropna(subset=["Moyenne"]).sort_values("Moyenne", ascending=True)
-
-#if not df_moy.empty:
-    #fig2, ax2 = plt.subplots(figsize=(10, max(6, len(df_moy) * 0.25)))
-    #palette_moy = {"🟢": "steelblue", "🟠": "orange", "🔴": "red"}
-    #couleurs = [palette_moy.get(s, "gray") for s in df_moy["Statut"]]
-    #ax2.barh(df_moy["Capteur"], df_moy["Moyenne"], color=couleurs)
-    #ax2.errorbar(
-        #df_moy["Moyenne"],
-        #range(len(df_moy)),
-        #xerr=df_moy["Écart-type"].fillna(0),
-        #fmt="none",
-        #color="black",
-        #alpha=0.5,
-        #linewidth=1,
-        #capsize=3,
-        #label="± Écart-type"
-    #)
-    #ax2.set_xlabel("Valeur moyenne (unité selon le capteur)")
-    #ax2.set_ylabel("Capteur")
-    #ax2.set_title("Valeur moyenne par capteur (barres d'erreur = ±1 écart-type)")
-    #ax2.legend()
-    #plt.tight_layout()
-    #st.pyplot(fig2)
-#else:
-    #st.info("Aucune colonne numérique disponible pour ce graphique.")
-
-
-
 # ----------------------------- Export Excel (style rapport de référence) -----------------------------
 
 
@@ -637,14 +601,13 @@ def _border_medium_bottom():
     return Border(left=thin, right=thin, top=thin, bottom=med)
 
 
-# Palettes couleurs identiques au rapport de référence
-COLOR_TITRE_BG    = "0D1F3C"   # bleu très foncé  — ligne titre principale
-COLOR_SOUS_BG     = "2E4057"   # bleu foncé        — ligne sous-titre
-COLOR_SECTION_BG  = "1F3864"   # bleu section      — séparateur de groupe
-COLOR_HEADER_BG   = "1F4E79"   # bleu en-têtes colonnes
+COLOR_TITRE_BG    = "0D1F3C"
+COLOR_SOUS_BG     = "2E4057"
+COLOR_SECTION_BG  = "1F3864"
+COLOR_HEADER_BG   = "1F4E79"
 COLOR_WHITE       = "FFFFFF"
-COLOR_ROW_EVEN    = "F2F2F2"   # gris très clair
-COLOR_ROW_ODD     = "FFFFFF"   # blanc
+COLOR_ROW_EVEN    = "F2F2F2"
+COLOR_ROW_ODD     = "FFFFFF"
 COLOR_VERT_BG     = "C6EFCE";  COLOR_VERT_FG    = "006100"
 COLOR_ORANGE_BG   = "FFC000";  COLOR_ORANGE_FG  = "7F4800"
 COLOR_ROUGE_BG    = "FFC7CE";  COLOR_ROUGE_FG   = "9C0006"
@@ -690,7 +653,6 @@ def style_headers(ws, row, headers):
 
 
 def style_data_row(ws, row_idx, data_row, statut_col_idx=None):
-    """Écrit une ligne de données avec alternance de couleurs + colorisation statut."""
     is_even = (row_idx % 2 == 0)
     base_bg = COLOR_ROW_EVEN if is_even else COLOR_ROW_ODD
 
@@ -699,7 +661,6 @@ def style_data_row(ws, row_idx, data_row, statut_col_idx=None):
         cell.font = Font(name=FONT_NAME, size=10)
         cell.border = _border_thin()
 
-        # Colorisation spéciale colonne Statut
         if statut_col_idx and col_idx == statut_col_idx:
             if val == "🟢":
                 cell.fill = PatternFill("solid", fgColor=COLOR_VERT_BG)
@@ -726,46 +687,37 @@ def auto_col_width(ws, col_idx, df_col_values, header, min_w=10, max_w=60):
 
 
 def ecrire_feuille_style(wb, sheet_name, titre, sous_titre, df, statut_col_name=None, section_label=None):
-    """Crée une feuille formatée dans le style du rapport de référence."""
     ws = wb.create_sheet(title=sheet_name)
     n_cols = len(df.columns)
     current_row = 1
 
-    # Titre + sous-titre
     style_titre(ws, current_row, titre, n_cols)
     current_row += 1
     style_sous_titre(ws, current_row, sous_titre, n_cols)
     current_row += 1
 
-    # Ligne vide
     current_row += 1
 
-    # Section optionnelle
     if section_label:
         style_section(ws, current_row, section_label, n_cols)
         current_row += 1
 
-    # En-têtes colonnes
     headers = list(df.columns)
     style_headers(ws, current_row, headers)
     header_row = current_row
     current_row += 1
 
-    # Trouver l'index de la colonne Statut (1-based)
     statut_col_idx = None
     if statut_col_name and statut_col_name in df.columns:
         statut_col_idx = df.columns.get_loc(statut_col_name) + 1
 
-    # Données
     for _, row_data in df.iterrows():
         style_data_row(ws, current_row, list(row_data), statut_col_idx=statut_col_idx)
         current_row += 1
 
-    # Largeur des colonnes
     for col_idx, col_name in enumerate(df.columns, start=1):
         auto_col_width(ws, col_idx, df[col_name].tolist(), col_name)
 
-    # Figer la ligne d'en-têtes
     ws.freeze_panes = ws.cell(row=header_row + 1, column=1)
 
     return ws
@@ -775,12 +727,10 @@ def generer_rapport_excel(df_simple, stats_main, df_stats_merged,
                            df_non_valides=None, df_manquants=None,
                            periode="", frequence=""):
     wb = Workbook()
-    # Supprimer la feuille par défaut
     wb.remove(wb.active)
 
     sous_titre_base = f"Période : {periode}  |  Fréquence : {frequence}"
 
-    # --- Feuille 1 : Complétude brute ---
     ecrire_feuille_style(
         wb,
         sheet_name="Complétude brute",
@@ -791,7 +741,6 @@ def generer_rapport_excel(df_simple, stats_main, df_stats_merged,
         section_label="📈  ANALYSE DE COMPLÉTUDE — Données brutes"
     )
 
-    # --- Feuille 2 : Stats descriptives ---
     ecrire_feuille_style(
         wb,
         sheet_name="Stats descriptives",
@@ -802,7 +751,6 @@ def generer_rapport_excel(df_simple, stats_main, df_stats_merged,
         section_label="📐  MIN / MAX / MOYENNE / MÉDIANE / ÉCART-TYPE par capteur"
     )
 
-    # --- Feuille 3 : Résumé capteurs ---
     ecrire_feuille_style(
         wb,
         sheet_name="Résumé capteurs",
@@ -813,7 +761,6 @@ def generer_rapport_excel(df_simple, stats_main, df_stats_merged,
         section_label="📋  DISPONIBILITÉ COMPLÈTE DES DONNÉES PAR CAPTEUR"
     )
 
-    # --- Feuille 4 : Capteurs non reconnus (facultatif) ---
     if df_non_valides is not None and not df_non_valides.empty:
         ecrire_feuille_style(
             wb,
@@ -824,7 +771,6 @@ def generer_rapport_excel(df_simple, stats_main, df_stats_merged,
             statut_col_name="Dans la référence"
         )
 
-    # --- Feuille 5 : Capteurs manquants (facultatif) ---
     if df_manquants is not None and not df_manquants.empty:
         ecrire_feuille_style(
             wb,
